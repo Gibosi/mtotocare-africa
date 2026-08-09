@@ -1,0 +1,64 @@
+# MtotoCare Africa - Git Ignore
+
+# Java / Maven
+target/
+*.class
+*.jar
+*.war
+*.ear
+.mvn/
+HELP.md
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.project
+.classpath
+.settings/
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Logs
+*.log
+logs/
+spring.log
+
+# Environment
+.env
+.env.local
+.env.production
+
+# Secrets
+*.pem
+*.key
+secrets.yml
+
+# Frontend (React Native)
+node_modules/
+.expo/
+.expo-shared/
+dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build
+build/
+*.apk
+*.ipa
+
+# Test
+coverage/
+.nyc_output/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3

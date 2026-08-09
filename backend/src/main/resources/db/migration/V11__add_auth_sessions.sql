@@ -1,0 +1,43 @@
+-- ===================================================================
+-- MtotoCare Africa - Auth Sessions and Password Reset Tokens
+-- Version: 1.1
+-- Migration: V11__add_auth_sessions.sql
+-- Description: Multi-device session tracking and password reset tokens
+-- ===================================================================
+
+-- ===================
+-- AUTH SESSIONS
+-- ===================
+CREATE TABLE auth_sessions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    refresh_token VARCHAR(500) NOT NULL,
+    device_id VARCHAR(200),
+    ip_address VARCHAR(50),
+    user_agent VARCHAR(500),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_used_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP NOT NULL,
+    revoked BOOLEAN NOT NULL DEFAULT FALSE,
+    revoked_at TIMESTAMP NULL,
+    CONSTRAINT fk_session_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE UNIQUE INDEX idx_session_token ON auth_sessions(refresh_token);
+CREATE INDEX idx_session_user ON auth_sessions(user_id);
+CREATE INDEX idx_session_active ON auth_sessions(user_id, revoked, expires_at);
+
+-- ===================
+-- PASSWORD RESET TOKENS
+-- ===================
+CREATE TABLE password_reset_tokens (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    token VARCHAR(200) NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    used_at TIMESTAMP NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ip_address VARCHAR(50),
+    CONSTRAINT fk_token_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE UNIQUE INDEX idx_token ON password_reset_tokens(token);
+CREATE INDEX idx_token_user ON password_reset_tokens(user_id);

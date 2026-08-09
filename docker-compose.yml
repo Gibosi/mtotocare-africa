@@ -1,0 +1,68 @@
+version: '3.8'
+
+# NFR-071: Containerized backend deployment.
+# This file is for SELF-HOSTING (on a VPS, NAS, or local server).
+# For Render.com / Railway / Fly.io, see DEPLOY.md instead.
+
+services:
+  backend:
+    build: ./backend
+    image: mtotocare/backend:1.0.0
+    container_name: mtotocare-backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      DB_URL: jdbc:mysql://db:3306/mtotocare?useSSL=false&serverTimezone=UTC
+      DB_USERNAME: ${DB_USERNAME:-mtotocare}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET (64+ chars) in .env}
+      GMAIL_USER: ${GMAIL_USER:-}
+      GMAIL_APP_PASSWORD: ${GMAIL_APP_PASSWORD:-}
+      EMAIL_SANDBOX: ${EMAIL_SANDBOX:-false}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8080}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      UPLOAD_DIR: /data/uploads
+      JAVA_TOOL_OPTIONS: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
+    volumes:
+      - backend-uploads:/data/uploads
+      - backend-logs:/app/logs
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  db:
+    image: mysql:8.0
+    container_name: mtotocare-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpw-change-me}
+      MYSQL_DATABASE: mtotocare
+      MYSQL_USER: ${DB_USERNAME:-mtotocare}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-mtotocare}
+    ports:
+      - "3306:3306"
+    volumes:
+      - db-data:/var/lib/mysql
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-rootpw-change-me}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  db-data:
+  backend-uploads:
+  backend-logs:

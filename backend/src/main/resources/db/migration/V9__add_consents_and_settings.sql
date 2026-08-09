@@ -1,0 +1,56 @@
+-- ===================================================================
+-- MtotoCare Africa - Consents and App Settings Tables
+-- Version: 1.1
+-- Migration: V9__add_consents_and_settings.sql
+-- Description: User consent management (GDPR/privacy) and app preferences
+-- ===================================================================
+
+-- ===================
+-- CONSENTS (GDPR, ToS, privacy)
+-- ===================
+CREATE TABLE consents (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    consent_type VARCHAR(50) NOT NULL,
+    version VARCHAR(20),
+    granted BOOLEAN NOT NULL DEFAULT FALSE,
+    granted_at TIMESTAMP NULL,
+    revoked_at TIMESTAMP NULL,
+    ip_address VARCHAR(50),
+    user_agent VARCHAR(500),
+    notes VARCHAR(500),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NULL ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL,
+    CONSTRAINT fk_consent_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX idx_consent_user ON consents(user_id);
+CREATE INDEX idx_consent_type ON consents(user_id, consent_type);
+
+-- ===================
+-- APP SETTINGS
+-- ===================
+CREATE TABLE app_settings (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL UNIQUE,
+    preferred_language VARCHAR(10) DEFAULT 'en',
+    theme VARCHAR(20) DEFAULT 'SYSTEM',
+    date_format VARCHAR(20) DEFAULT 'YYYY-MM-DD',
+    weight_unit VARCHAR(10) DEFAULT 'KG',
+    height_unit VARCHAR(10) DEFAULT 'CM',
+    temperature_unit VARCHAR(10) DEFAULT 'CELSIUS',
+    enable_push_notifications BOOLEAN NOT NULL DEFAULT TRUE,
+    enable_email_notifications BOOLEAN NOT NULL DEFAULT TRUE,
+    enable_sms_notifications BOOLEAN NOT NULL DEFAULT FALSE,
+    vaccination_reminder_days_before INT DEFAULT 7,
+    appointment_reminder_hours_before INT DEFAULT 24,
+    growth_check_reminder_days INT DEFAULT 30,
+    share_data_research BOOLEAN NOT NULL DEFAULT FALSE,
+    enable_ai_suggestions BOOLEAN NOT NULL DEFAULT TRUE,
+    auto_sync_on_wifi_only BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NULL ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL,
+    CONSTRAINT fk_settings_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX idx_settings_user ON app_settings(user_id);

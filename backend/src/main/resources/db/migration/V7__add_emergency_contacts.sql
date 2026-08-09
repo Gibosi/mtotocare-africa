@@ -1,0 +1,27 @@
+-- ===================================================================
+-- MtotoCare Africa - Emergency Contacts Table
+-- Version: 1.1
+-- Migration: V7__add_emergency_contacts.sql
+-- Description: Stores user emergency contacts with priority and relationships
+-- ===================================================================
+
+CREATE TABLE emergency_contacts (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    name VARCHAR(150) NOT NULL,
+    relationship VARCHAR(50),
+    phone_number VARCHAR(20) NOT NULL,
+    alternate_phone VARCHAR(20),
+    email VARCHAR(150),
+    address VARCHAR(500),
+    is_primary BOOLEAN NOT NULL DEFAULT FALSE,
+    priority INT NOT NULL DEFAULT 3,
+    can_pickup_child BOOLEAN NOT NULL DEFAULT FALSE,
+    notes VARCHAR(500),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NULL ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL,
+    CONSTRAINT fk_emerg_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX idx_emerg_user ON emergency_contacts(user_id);
+CREATE INDEX idx_emerg_primary ON emergency_contacts(user_id, is_primary);

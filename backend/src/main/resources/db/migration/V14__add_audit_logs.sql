@@ -1,0 +1,19 @@
+-- V14: Audit logs (NFR-023, NFR-067)
+-- Records every security-sensitive action by an authenticated user.
+CREATE TABLE audit_logs (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_email      VARCHAR(150),
+    user_id         BIGINT,
+    action          VARCHAR(80) NOT NULL,
+    entity_type     VARCHAR(80),
+    entity_id       BIGINT,
+    details         VARCHAR(1000),
+    ip_address      VARCHAR(64),
+    created_at      TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    updated_at      TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)
+);
+
+CREATE INDEX idx_audit_user   ON audit_logs (user_email);
+CREATE INDEX idx_audit_action ON audit_logs (action);
+CREATE INDEX idx_audit_entity ON audit_logs (entity_type, entity_id);
+CREATE INDEX idx_audit_date   ON audit_logs (created_at);

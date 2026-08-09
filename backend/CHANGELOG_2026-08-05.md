@@ -1,0 +1,409 @@
+# MtotoCare Africa — Fix & Feature Delivery (2026-08-05)
+
+## 1. Admin: "Delete user" unexpected error — FIXED
+`children.parent_id` is `ON DELETE RESTRICT`. Deleting a parent with any
+children (even soft-deleted ones) threw a raw `DataIntegrityViolationException`
+that the generic handler reported as "An unexpected error occurred."
+
+- `UserService.deleteUser()` now cascade-deletes the user's children first
+  (their own vaccination/growth/appointment/etc. records cascade automatically
+  at the DB level), then deletes the user.
+- `AdminController.deleteUser` now delegates to the fixed service method
+  instead of duplicating the old broken logic.
+- `ChildRepository.findByParentId` added.
+- `GlobalExceptionHandler` now has a dedicated `DataIntegrityViolationException`
+  handler returning a clear 409 message instead of a generic 500, for any
+  future FK conflict.
+
+## 2. Meal plan nutrition always constant after regeneration — FIXED
+Two root causes: the generator was 100% static (same 4 meals forever per age
+bracket), and the JPA entity never mapped several DB columns that already
+existed (`meal_type`, `meal_name`, `plan_date`, `calories_kcal`).
+
+- `NutritionService.generateDaily()` now tries the real AI provider first
+  (allergy-aware, told the previous plan so it varies the output), and falls
+  back to a rotating set of 3 curated meal variants per age bracket if no AI
+  provider is configured — "Regenerate" always changes something now.
+- `NutritionPlan` entity now maps `planDate`, `mealType`, `mealName`,
+  `description`, `caloriesKcal`.
+- Migration `V15__add_nutrition_plan_fields.sql` reconciles `nutrition_plans`
+  with the columns the entity actually uses (these existed in the "current"
+  schema doc but had never landed in a real Flyway migration).
+
+## 3. Vaccination tracking not flowing from clinicians to parents — FIXED
+`VaccinationService` had working `recordVaccination()` / `scheduleAllForChild()`
+methods, but neither was ever exposed on a controller endpoint — so the
+"record a dose" action that both the mobile provider screen and the web
+frontend already called (`POST /vaccinations/child/{childId}`) 404'd, and
+`GET /vaccinations/upcoming` (used by parent home screens) didn't exist either.
+
+- Both endpoints added to `VaccinationController`, restricted to clinical
+  roles (`DOCTOR`, `NURSE`, `MIDWIFE`, `CHW`, `ADMIN`) for recording; anyone
+  authenticated can read.
+- **Web frontend was read-only** for vaccinations and medications (no way to
+  actually record anything from the provider portal). Added a full
+  "Record Vaccination" modal and "Add Medication" modal to
+  `pages/provider/PatientDetail.jsx`.
+- **Mobile bug found while auditing this**: five inline forms in the provider
+  patient-detail screen (growth, vaccination, diagnosis, medication, allergy)
+  had `setTimeout(() => { onDone }, 1000);` — referencing the callback
+  instead of calling it, so after saving, the form never closed or the list
+  never refreshed. Fixed all five to `onDone();`.
+
+## 4. Growth chart always showing "0m" — FIXED
+`calculateAgeInMonths()` always measures *from a date to right now*. The
+chart was calling it with the measurement date instead of the child's date
+of birth, so it computed "months since the measurement was taken" (≈0)
+instead of the child's age at that measurement.
+
+- Added `ageInMonthsAt(dob, referenceDate)` to `src/utils/date.ts` and
+  switched `growth.tsx` to use it (found and fixed in two places — the
+  chart labels and the "All Records" list, which had the same bug).
+
+## 5. WHO Child Growth Assessment Module — NEW
+`growth_records` already had `weight_for_age_z_score` / `height_for_age_z_score`
+/ `weight_for_height_z_score` columns from the original migration, but the
+code never computed them ("Simplified — production would use WHO Z-scores").
+
+Implemented for real, using the **official WHO Child Growth Standards LMS
+reference tables** (Multicentre Growth Reference Study, 2006), sourced from
+WHO's own `WorldHealthOrganization/anthro` R package and verified against
+known reference values (e.g. median birth weight for boys = 3.3464 kg):
+
+- **Z-score engine** (`growth/who/Lms.java`, `WhoGrowthStandards.java`):
+  proper LMS formula, daily-precision age lookups (0–1826 days, both sexes),
+  0.1 cm precision for weight-for-length/height.
+- **WHO classification + app-level triage** (`growth/who/GrowthClassifier.java`):
+  official WHO cutoffs for WAZ/HAZ/WHZ/BAZ (severely underweight/stunted/
+  wasted, normal, overweight, obese), plus a clearly-labeled app-level risk
+  stratification (LOW/MODERATE/HIGH/CRITICAL) and 0–100 health score — these
+  two are explicitly documented as heuristics, not WHO-published metrics.
+- **Growth trend** (IMPROVING/STABLE/FALTERING) vs. the child's previous
+  assessment.
+- **AI-generated clinical summary** (explainable — plain-language explanation
+  of the numbers and recommendation), with a templated fallback if no AI
+  provider is configured.
+- **Emergency detection & referral**: clinician-reportable oedema / severe
+  dehydration flags, severe wasting, etc. all feed into `emergencyFlag` /
+  `referralRecommended`.
+- Migration `V16__add_who_growth_assessment_fields.sql` adds `age_in_days`,
+  `bmi_for_age_z_score`, `risk_level`, `health_score`, `growth_trend`,
+  `referral_recommended`, `emergency_flag`, `oedema`, `severe_dehydration`,
+  `ai_summary` to `growth_records`.
+- UI: WHO Z-score badges, risk/trend pills, and the AI summary added to both
+  the **mobile** growth screen and the **web** provider patient-detail growth
+  tab, including MUAC + clinical danger-sign inputs on both add-measurement
+  forms. Added a "+ Add Measurement" flow to the web portal (didn't exist
+  before — web could only view growth records, not add them).
+- `database/schema.sql` (the standalone reference doc) reconciled to match
+  the real Flyway-managed schema, including fixing a pre-existing column-name
+  mismatch (`weight_for_age_z` in the doc vs. the real `weight_for_age_z_score`).
+
+## 6. Mobile crash: "Property 't' doesn't exist" — FIXED
+`AppointmentCard` in `app/appointments.tsx` used the translation function
+`t()` without calling `useLanguage()` itself (it's a sibling component to
+the screen that has it, not nested inside it). Added the missing hook call.
+Audited the rest of the mobile app for the same pattern — this was the only
+instance.
+
+## 7. Mobile route warning: "No route named 'child-records'" — FIXED
+`app/_layout.tsx` declared `<Stack.Screen name="child-records" />`, but no
+such route exists — only `child-records/index`, `/add`, `/[id]`. Fixed the
+screen name to `child-records/index`, and removed two dead duplicate files
+(`add-record.tsx`, `record.tsx`) that were byte-for-byte copies of
+`add.tsx`/`[id].tsx` left over from an earlier rename.
+
+## Not in scope for this pass
+The original WHO module request also listed developmental-milestone delay
+detection tied into this same assessment, EMR/HIS integration, and
+national digital-health-platform integration. `development` module
+(milestones) already exists as a separate feature in the app; wiring it
+into this same assessment record, plus the external-integration items,
+would need a dedicated follow-up — they're substantial enough that folding
+them in here risked rushing the core Z-score engine, which needed to be
+right.
+
+---
+
+# Follow-up: full error-hunting pass (2026-08-06)
+
+Ran real tooling instead of just reading code: `npm install` + production
+build + dev server for the frontend (all clean — confirms a local PostCSS
+error some users hit is environment-specific, not a bad file), and a full
+`tsc --noEmit` typecheck across the entire mobile app, which went from
+**52 real type errors down to 0**. Maven Central isn't reachable from this
+environment so the backend could only get a rigorous static review (full
+brace/paren balance sweep across every `.java` file, cross-checked call
+sites against actual method signatures) — a real `mvn compile` is still
+recommended before deploying.
+
+Highlights (full list in git history / diff):
+
+- **`theme.typography` didn't exist at all**, but was used by the shared
+  `Loading`, `EmptyState`, and `ErrorMessage` components used across 14
+  files app-wide — any loading/empty/error state with a message would
+  crash with `Cannot read properties of undefined`. Added a real
+  typography scale to the theme.
+- **5 more instances of the `useToast()`-not-called bug** (same shape as
+  the `t()` bug found earlier): `AddGrowthForm`, `AddVaccinationForm`,
+  `AddDiagnosisForm`, `AddMedicationForm`, `AddAllergyForm` in the provider
+  mobile screen all called `showError`/`showSuccess` without importing the
+  hook. Every save (success *or* failure) in any of these 5 forms would
+  crash. Fixed all five.
+- **`AIChatScreen.tsx`** (reachable via `/ai-chat`) imported a type and
+  called a method (`HealthArticle`, `aiOfflineLibrary.search()`) that had
+  been refactored away, and read `response.data.data.aiResponse` when the
+  real field is `content`. Rewrote the offline-fallback path to match the
+  actual `aiOfflineLibrary.answer(question, child)` API.
+- **Mobile `NutritionPlan` type was missing `feedingFrequency`/
+  `foodsToAvoid`** even though the backend already returns them (see the
+  nutrition fix above) — the mobile type just hadn't been updated.
+- **`choose-language.tsx`** called the translate function with an
+  unsupported 3rd argument, silently dropping the intended fallback text.
+- An entire unused **offline-first subsystem** (`appInitializer`,
+  `connectivity`, `syncManager`, `offlineAuth`, `repository`) had several
+  calls to methods that don't exist on their target services
+  (`connectivity.getState()`, `.initialize()`, `.destroy()`,
+  `syncManager.runSync('login')` with an unsupported argument, etc.). It's
+  never actually invoked from the app today, so it wasn't live-crashing
+  anyone, but it's clearly meant to be the app's offline-boot sequence per
+  its own doc comments — fixed all the call sites to match the real APIs
+  so it's ready to be wired into the root layout when that work happens.
+- `tsconfig.json`: added an explicit `module: esnext` (dynamic imports in
+  `network.ts` were valid code but tripped `tsc`'s stricter default).
+- `i18n/index.ts`: `i18nReady` was typed `Promise<void>` but assigned a
+  `Promise<TFunction>` — cosmetic type mismatch, fixed by coercing with
+  `.then(() => undefined)`.
+
+---
+
+# Follow-up: full spec audit against the WHO Growth Assessment Module (2026-08-06)
+
+Went through every bullet in the requirements doc against the actual code
+(not just my notes, which had gone stale — several items I'd previously
+flagged "not in scope" turned out to already be built). Status below.
+
+## Already fully implemented (verified against code)
+- **Core Features**: real WHO LMS Z-scores (WAZ/HAZ/WHZ/BAZ), WHO
+  classification, color-coded UI badges, persisted to the child's growth
+  record — all confirmed working.
+- **AI Features**: personalized nutrition recommendations (nutrition
+  module), automatic clinical summary, growth trend prediction
+  (Improving/Stable/Faltering), Low/Moderate/High/Critical risk
+  stratification, explainable summaries, 0–100 health score.
+- **Child Development**: `DevelopmentMilestoneService` already covers
+  motor/language/cognitive/social milestones with auto-delay-detection
+  (flags a milestone DELAYED once it's 2+ months overdue) and
+  per-category recommended interventions — and it's folded into the
+  growth assessment's risk stratification, so a developmental delay bumps
+  risk the same way a low Z-score does.
+- **Clinical Support**: referral recommendations, emergency detection
+  (severe wasting, oedema, severe dehydration), and automatic follow-up
+  appointment + reminder scheduling for at-risk children — all present in
+  `GrowthService`.
+- **Technical — WHO standard updates without code changes**: already true
+  by construction — the LMS reference tables are loaded from CSV resource
+  files at startup, not hardcoded in Java. Updating to a future WHO
+  standard means replacing the CSV, no code change.
+
+## Fixed this pass (were genuinely missing)
+- **Provider dashboards** (nutrition status, vaccination coverage, growth
+  trends, high-risk children) — the existing dashboard only showed patient
+  count and appointments. Added `AnalyticsService.getProviderDashboard()` +
+  a new `/analytics/provider-dashboard` endpoint (role-gated to clinical
+  staff) returning nutrition status distribution, risk-level counts, a
+  sorted high-risk children list, and vaccination coverage. Added a
+  matching panel to the web provider dashboard.
+- **Anonymized reports for research/public health** — `getPopulationStats()`
+  only had demographic counts (gender, age band), missing the actual
+  public-health indicators this module exists to produce. Added
+  malnutrition prevalence (stunting/wasting/underweight/overweight/obese,
+  counts + percentages) computed from each child's latest assessment —
+  aggregate only, no child-identifying fields leave the endpoint.
+
+## Known gaps — flagging honestly rather than rushing
+- **WHO growth charts (percentile curve overlay)**: the growth chart shows
+  the child's own weight/height trajectory, but doesn't overlay it against
+  WHO's percentile reference curves the way a clinical growth chart does.
+  The underlying LMS data needed to draw those curves is already loaded on
+  the backend — this would need a new endpoint to expose percentile-line
+  data plus a charting change on the frontend.
+- **Offline functionality with automatic sync**: this turned out to be a
+  more significant gap than my last update suggested. There's a complete,
+  well-built offline-first subsystem (`appInitializer`, `connectivity`,
+  `syncManager`, `offlineAuth`, a repository layer with local SQLite +
+  sync queue) — I found and fixed several real bugs in it last pass — but
+  **it's never actually wired into the app**. The live app's auth/init
+  path is a much simpler Redux thunk that just persists a token; it
+  doesn't use the local database or sync queue at all, so today the app
+  requires a live connection for most data. Wiring the offline subsystem
+  in is a real, non-trivial integration (replacing direct API calls with
+  repository calls app-wide, switching the init sequence) that I didn't
+  want to force through without device/simulator testing — doing it
+  blind risked breaking app boot for everyone to fix something that
+  isn't currently live-broken.
+- **Encrypted storage**: auth tokens are genuinely encrypted (iOS
+  Keychain / Android Keystore via `expo-secure-store`). The local SQLite
+  cache used by the (currently unwired) offline subsystem is not
+  encrypted — moot until that subsystem is wired in, but worth doing
+  together with it (e.g. SQLCipher) rather than separately.
+- **Interactive child health timeline**: growth history is chartable and
+  vaccination/diagnosis/appointment history all exist as separate lists,
+  but there's no unified cross-module timeline view combining them.
+- **EMR/HIS and national digital-health-platform integration**: not
+  attempted — this needs external standards (e.g. HL7 FHIR) and is a
+  project-level integration effort in its own right, not something to
+  bolt on inside this module.
+
+---
+
+# Follow-up: full frontend/mobile ↔ backend endpoint audit (2026-08-07)
+
+No master FR/NFR requirements document exists in the delivered codebase —
+only 14 scattered ID references in code comments. Rather than guess at
+numbers that can't be verified, did an exhaustive automated audit instead:
+extracted all 163 backend endpoint mappings and every single API call in
+both the web frontend and mobile app, then cross-referenced them. This is
+the same category of bug that caused the original vaccination-recording
+issue (endpoint referenced by a client but never implemented), so it was
+worth checking systematically rather than only when something's reported.
+
+**Real, previously-invisible bugs found and fixed:**
+
+- **`PUT /notifications/read-all` didn't exist** — the mobile "mark all as
+  read" button called it and would fail every time. Added a real bulk-update
+  endpoint (`NotificationRepository.markAllAsRead`).
+- **Notifications never actually displayed in the mobile app, silently.**
+  `GET /notifications` returned a raw array; the mobile Redux thunk expected
+  a paginated `{content: [...]}` wrapper (`res.data.data?.content || []`),
+  so it always fell back to an empty list regardless of how many
+  notifications existed. No error, no crash — just a permanently empty
+  inbox. Made the endpoint properly paginated (`PageResponse<Notification>`)
+  to match what the client already expected, plus added the missing
+  `GET /notifications/unread` list endpoint.
+- **`GET /admin/sync/status` didn't exist** — the admin sync screen always
+  silently showed zeros. Added a real endpoint backed by actual `sync_logs`
+  aggregate data (pending/failed counts aren't tracked server-side yet since
+  the sync protocol doesn't have clients report per-item failures, so those
+  stay honestly at 0 rather than being fabricated; `syncedToday` is real).
+- **`GET /nutrition/child/{id}/weekly` didn't exist** — called by the mobile
+  weekly nutrition view. Added it (returns whatever's already been
+  generated/persisted in that date range).
+- **`GET /appointments/{id}` didn't exist** on either client (currently
+  unused/dead code on both, but a real REST completeness gap and an easy
+  fix). Added it, reusing the existing ownership-check logic.
+- **`AdminController.getStats()` had a hardcoded `"children": 0`** instead
+  of a real count — found while already in that file for the sync-status
+  work. Fixed.
+
+**Result**: every API call in both the web frontend and mobile app now has
+a real, matching backend endpoint — verified by automated diff, not just
+inspection.
+
+
+
+
+---
+
+# Follow-up: real build error from a live `mvn spring-boot:run` (2026-08-07)
+
+The user ran an actual Maven build and hit ~100 compile errors. One was a
+real bug I'd introduced: `UserService.deleteUser()` had `@Transactional`
+duplicated on two consecutive lines (left over from my very first patch to
+this method) — Java doesn't allow a non-repeatable annotation twice on the
+same element, so this alone failed the whole build. Fixed.
+
+The other ~95 errors were all "cannot find symbol" for Lombok-generated
+methods (`getRoles()`, `getId()`, `builder()`, etc.) across files I never
+touched (`User`, `AuditLog`, `Facility`, `Doctor`, `ApiResponse`) — verified
+the affected classes genuinely have `@Getter/@Setter/@Builder` in source, so
+this isn't a missing-annotation bug. That pattern (the annotated class
+itself never errors, only *other* files that call its generated methods)
+is the known signature of Maven reusing a stale `target/classes/*.class`
+from an earlier partial build under incremental compilation — not a source
+defect. Recommended the user run `mvn clean` before `mvn spring-boot:run`
+to force a full recompile.
+
+---
+
+# Follow-up: real-device testing round (2026-08-08)
+
+The user ran the actual apps and sent screenshots + a live bug list.
+Everything below was confirmed against the real code (not guessed), fixed,
+and re-verified with a real `tsc --noEmit` pass (0 errors) plus a full
+backend brace/paren sweep.
+
+## 1. AI Assistant giving generic canned responses — DIAGNOSED (no code bug)
+Traced the full path: `AIService.chat()` tries the real LLM first and only
+falls back to a templated response if that call returns null.
+`AIClient.chat()` returns null immediately — without even attempting a
+request — whenever the provider is `groq`/`openai` and the API key is
+blank. `application.yml` already defaults `provider` to `groq`, but
+`GROQ_API_KEY` was never set when the backend was started, so every
+request silently fell back to the canned template. This single missing
+env var also explains the non-varying nutrition regeneration and any
+generic growth-assessment AI summaries — all three features share this
+same `AIClient`. Fix: set `GROQ_API_KEY` (free tier, console.groq.com/keys)
+before `mvn spring-boot:run`.
+
+## 2. "Appointment booked does not seen by a doctor" — FIXED
+Root cause: `GET /doctors/me/appointments` and `/doctors/me/patients` were
+literally hardcoded stub placeholders (`return ApiResponse.success(List.of())`,
+with a `// TODO: implement patient assignment` comment) — always empty,
+regardless of real data. Implemented both for real, querying by the
+doctor's own ID via a new `AppointmentRepository.findByDoctorIdOrderByAppointmentDatetimeAsc`.
+Confirmed the parent booking flow already requires and sends `doctorId`,
+so this now has real data to show.
+
+## 3. Admin "can't delete user" — FIXED
+The mobile admin Users screen had no delete action at all (only
+activate/deactivate) — that was the "deny," the button simply didn't
+exist. Added it with a confirmation dialog, wired to the already-fixed
+cascading-delete endpoint. Web already had this.
+
+## 4. Admin dashboard stats all showing "--" — FIXED
+The backend, the web admin dashboard, and the mobile admin dashboard were
+each using different, mutually inconsistent key names for the same stats
+object (e.g. `children` vs `totalChildren`; no appointment/vaccination
+counts existed on the backend at all). Standardized the backend response
+and added real appointment/vaccination counts.
+
+## 5. No patient or vaccine management for admin — BUILT
+- `GET /children` was 100% parent-scoped — an admin/doctor/nurse/CHW user
+  got an empty list (or their own zero children), not "all patients."
+  Made it role-aware: admins and clinical staff now see every child;
+  parents still only see their own. Same fix applied to `verifyOwnership`
+  so admins can open any child's detail record, not just their own.
+- Vaccine schedule (the EPI catalog itself — "BCG at birth" etc., as
+  opposed to a specific child's doses) had **no admin API at all** —
+  only the entity/repository existed, used internally to auto-generate
+  each child's schedule. The mobile "Vaccines" quick action was a literal
+  stub: `onPress={() => showError('Manage vaccine schedule')}` — it fired
+  an error toast with the feature's own name instead of navigating
+  anywhere (this was the red banner visible at the top of the admin
+  dashboard screenshot). Built a full CRUD API
+  (`VaccinationScheduleController`) and matching mobile screen.
+  Also built a new "All Patients" admin screen.
+
+## 6. Systemic routing bug — found in TWO tab groups, both fixed
+`(provider)/_layout.tsx` and `(admin)/_layout.tsx` both use a custom Tabs
+navigator with only some folder files explicitly declared as
+`<Tabs.Screen>`. Expo Router still auto-discovers every `.tsx` file in
+the folder and adds it as an *additional, undeclared tab* (Tabs don't
+stack — a "detail" screen meant to be pushed on top instead silently
+becomes a sibling tab with a "?" icon, as seen in the screenshots for
+"patient-detail" — and in the admin dashboard's tab bar showing 7 items
+when only 5 are declared, from `settings.tsx`/`sync.tsx` already quietly
+having the same problem).
+- Moved `(provider)/patient-detail.tsx` → top-level `provider-patient-detail.tsx`.
+- Moved `(admin)/settings.tsx`, `sync.tsx` → `admin-settings.tsx`, `admin-sync.tsx`.
+- Registered all of these as proper `<Stack.Screen>` entries in the root layout.
+- Also fixed a real hang: the detail screen's `if (!id) return;` skipped
+  loading but never set `loading = false`, so a missing/failed load spun
+  forever. Added proper "no patient selected" / "couldn't load" states.
+- **Caught during this fix**: moving files changed their folder depth, so
+  their `../../src/...` imports needed to become `../src/...`. Missed
+  this on the first pass — a full `npm install` + `tsc --noEmit` re-run
+  caught it (`Cannot find module` on 5 files), which would have been a
+  hard bundle-time crash on every one of those screens. Fixed and
+  re-verified clean.

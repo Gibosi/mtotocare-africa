@@ -1,0 +1,42 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:mtotocare-test;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: false
+        dialect: org.hibernate.dialect.H2Dialect
+
+  # CRITICAL: Disable Flyway for tests - JPA creates the schema
+  flyway:
+    enabled: false
+    baseline-on-migrate: false
+    validate-on-migrate: false
+    clean-disabled: true
+
+  h2:
+    console:
+      enabled: false
+
+# Disable JWT requirement for tests
+mtotocare:
+  jwt:
+    secret: TestSecretKeyForUnitTestsOnly_ThisIs32Chars
+    access-token-expiration: 900000
+    refresh-token-expiration: 604800000
+  cors:
+    allowed-origins: '*'
+
+logging:
+  level:
+    com.mtotocare.africa: INFO
+    org.springframework.security: WARN
+    org.flywaydb: OFF

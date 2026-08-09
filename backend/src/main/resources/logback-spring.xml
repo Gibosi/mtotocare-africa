@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  NFR-061, NFR-062, NFR-063, NFR-065: structured logging for auth events,
+  sync events, errors, with retention. Log levels:
+    - prod: INFO
+    - dev:  DEBUG
+  Output:
+    - Console: human-readable for `docker logs` / Render
+    - File:    JSON-per-line to ./logs/app.json (rotated daily, kept 30d)
+-->
+<configuration>
+
+  <property name="LOG_PATH" value="${LOG_PATH:-./logs}"/>
+  <property name="APP_NAME" value="mtotocare"/>
+
+  <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <file>${LOG_PATH}/${APP_NAME}.log</file>
+    <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+      <fileNamePattern>${LOG_PATH}/${APP_NAME}.%d{yyyy-MM-dd}.log.gz</fileNamePattern>
+      <maxHistory>30</maxHistory>
+      <totalSizeCap>2GB</totalSizeCap>
+    </rollingPolicy>
+    <encoder>
+      <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <!-- NFR-065: dedicated auth event log -->
+  <appender name="AUTH_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <file>${LOG_PATH}/auth-events.log</file>
+    <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+      <fileNamePattern>${LOG_PATH}/auth-events.%d{yyyy-MM-dd}.log.gz</fileNamePattern>
+      <maxHistory>90</maxHistory>
+    </rollingPolicy>
+    <encoder>
+      <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} AUTH %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <logger name="com.mtotocare.africa.security" level="INFO" additivity="false">
+    <appender-ref ref="AUTH_FILE"/>
+    <appender-ref ref="CONSOLE"/>
+  </logger>
+
+  <root level="INFO">
+    <appender-ref ref="CONSOLE"/>
+    <appender-ref ref="FILE"/>
+  </root>
+
+  <springProfile name="dev">
+    <root level="DEBUG">
+      <appender-ref ref="CONSOLE"/>
+      <appender-ref ref="FILE"/>
+    </root>
+  </springProfile>
+
+  <springProfile name="prod">
+    <root level="INFO">
+      <appender-ref ref="CONSOLE"/>
+      <appender-ref ref="FILE"/>
+    </root>
+  </springProfile>
+
+</configuration>

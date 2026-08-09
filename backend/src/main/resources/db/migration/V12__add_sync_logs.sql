@@ -1,0 +1,27 @@
+-- ===================================================================
+-- MtotoCare Africa - Sync Logs Table
+-- Version: 1.1
+-- Migration: V12__add_sync_logs.sql
+-- Description: Tracks offline sync operations
+-- ===================================================================
+
+CREATE TABLE sync_logs (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT,
+    device_id VARCHAR(200),
+    client_id VARCHAR(200),
+    operation VARCHAR(50),
+    records_uploaded INT DEFAULT 0,
+    records_downloaded INT DEFAULT 0,
+    conflicts_resolved INT DEFAULT 0,
+    synced_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    client_timestamp TIMESTAMP NULL,
+    app_version VARCHAR(20),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NULL ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL,
+    CONSTRAINT fk_sync_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+CREATE INDEX idx_sync_user ON sync_logs(user_id);
+CREATE INDEX idx_sync_time ON sync_logs(synced_at);
+CREATE INDEX idx_sync_device ON sync_logs(device_id);

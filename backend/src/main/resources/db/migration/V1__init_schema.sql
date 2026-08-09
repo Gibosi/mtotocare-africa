@@ -1,0 +1,361 @@
+-- ===================================================================
+-- MtotoCare Africa - Initial Database Schema
+-- Version: 1.0
+-- Migration: V1__init_schema.sql
+-- Description: Creates all core tables for the platform
+-- ===================================================================
+
+-- ===================
+-- USERS TABLE
+-- ===================
+CREATE TABLE users (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    full_name VARCHAR(100) NOT NULL,
+    email VARCHAR(150) NOT NULL UNIQUE,
+    phone_number VARCHAR(20) UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    email_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    phone_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    profile_picture_url VARCHAR(500),
+    preferred_language VARCHAR(10) DEFAULT 'en',
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    last_login_at TIMESTAMP NULL,
+    license_number VARCHAR(100),
+    specialization VARCHAR(100),
+    clinic_id BIGINT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NULL ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL
+);
+CREATE INDEX idx_user_email ON users(email);
+CREATE INDEX idx_user_phone ON users(phone_number);
+CREATE INDEX idx_user_active ON users(active, deleted_at);
+CREATE INDEX idx_user_created ON users(created_at DESC);
+
+-- ===================
+-- USER ROLES (Many-to-Many)
+-- ===================
+CREATE TABLE user_roles (
+    user_id BIGINT NOT NULL,
+    role VARCHAR(50) NOT NULL,
+    PRIMARY KEY (user_id, role),
+    CONSTRAINT fk_user_roles_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX idx_user_roles_role ON user_roles(role);
+
+-- ===================
+-- FACILITIES (Healthcare)
+-- ===================
+CREATE TABLE facilities (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(200) NOT NULL,
+    facility_type VARCHAR(50) NOT NULL,
+    address VARCHAR(500),
+    region VARCHAR(100),
+    district VARCHAR(100),
+    phone_number VARCHAR(20),
+    email VARCHAR(150),
+    latitude DOUBLE,
+    longitude DOUBLE,
+    operating_hours VARCHAR(500),
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NULL ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL
+);
+CREATE INDEX idx_facility_region ON facilities(region);
+CREATE INDEX idx_facility_type ON facilities(facility_type);
+CREATE INDEX idx_facility_active ON facilities(active, deleted_at);
+
+-- ===================
+-- DOCTORS
+-- ===================
+CREATE TABLE doctors (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL UNIQUE,
+    license_number VARCHAR(100) NOT NULL UNIQUE,
+    specialization VARCHAR(100),
+    qualifications VARCHAR(200),
+    years_of_experience INT,
+    consultation_fee VARCHAR(20),
+    accepting_new_patients BOOLEAN NOT NULL DEFAULT TRUE,
+    bio VARCHAR(500),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NULL ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL,
+    CONSTRAINT fk_doctor_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX idx_doctor_user ON doctors(user_id);
+CREATE INDEX idx_doctor_specialization ON doctors(specialization);
+
+CREATE TABLE doctor_languages (
+    doctor_id BIGINT NOT NULL,
+    language VARCHAR(10) NOT NULL,
+    PRIMARY KEY (doctor_id, language),
+    CONSTRAINT fk_doctor_languages FOREIGN KEY (doctor_id) REFERENCES doctors(id) ON DELETE CASCADE
+);
+
+-- ===================
+-- CHILDREN TABLE
+-- ===================
+CREATE TABLE children (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    first_name VARCHAR(100) NOT NULL,
+    last_name VARCHAR(100),
+    date_of_birth DATE NOT NULL,
+    gender VARCHAR(10) NOT NULL CHECK (gender IN ('MALE', 'FEMALE', 'OTHER')),
+    blood_group VARCHAR(5),
+    birth_weight_kg DECIMAL(5,2),
+    birth_height_cm DECIMAL(5,2),
+    profile_picture_url VARCHAR(500),
+    national_id VARCHAR(50),
+    parent_id BIGINT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NULL ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL,
+    CONSTRAINT fk_child_parent FOREIGN KEY (parent_id) REFERENCES users(id) ON DELETE RESTRICT
+);
+CREATE INDEX idx_child_parent ON children(parent_id);
+CREATE INDEX idx_child_dob ON children(date_of_birth);
+CREATE INDEX idx_child_deleted ON children(deleted_at);
+CREATE INDEX idx_child_gender ON children(gender);
+
+-- ===================
+-- VACCINATION SCHEDULE (Template)
+-- ===================
+CREATE TABLE vaccination_schedule (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    vaccine_code VARCHAR(20) NOT NULL UNIQUE,
+    vaccine_name VARCHAR(100) NOT NULL,
+    description VARCHAR(500),
+    recommended_age_weeks INT NOT NULL,
+    doses_required INT NOT NULL DEFAULT 1,
+    dose_number INT DEFAULT 1,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_vacc_schedule_active ON vaccination_schedule(active, recommended_age_weeks);
+
+-- ===================
+-- VACCINATIONS (Actual Records)
+-- ===================
+CREATE TABLE vaccinations (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    child_id BIGINT NOT NULL,
+    schedule_id BIGINT NOT NULL,
+    dose_number INT NOT NULL DEFAULT 1,
+    administered_at DATE,
+    next_dose_due DATE,
+    administered_by VARCHAR(200),
+    clinic_name VARCHAR(200),
+    batch_number VARCHAR(100),
+    notes VARCHAR(1000),
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','COMPLETED','OVERDUE','SKIPPED')),
+    certificate_url VARCHAR(500),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NULL ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL,
+    CONSTRAINT fk_vacc_child FOREIGN KEY (child_id) REFERENCES children(id) ON DELETE CASCADE,
+    CONSTRAINT fk_vacc_schedule FOREIGN KEY (schedule_id) REFERENCES vaccination_schedule(id)
+);
+CREATE INDEX idx_vacc_child ON vaccinations(child_id);
+CREATE INDEX idx_vacc_status ON vaccinations(status);
+CREATE INDEX idx_vacc_due ON vaccinations(next_dose_due);
+CREATE INDEX idx_vacc_child_status ON vaccinations(child_id, status);
+
+-- ===================
+-- APPOINTMENTS
+-- ===================
+CREATE TABLE appointments (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    child_id BIGINT NOT NULL,
+    doctor_id BIGINT,
+    appointment_datetime TIMESTAMP NOT NULL,
+    duration_minutes INT DEFAULT 30,
+    appointment_type VARCHAR(100),
+    clinic_name VARCHAR(200),
+    clinic_address VARCHAR(500),
+    reason VARCHAR(1000),
+    notes VARCHAR(1000),
+    status VARCHAR(20) NOT NULL DEFAULT 'SCHEDULED' CHECK (status IN ('SCHEDULED','CONFIRMED','COMPLETED','CANCELLED','NO_SHOW')),
+    cancellation_reason VARCHAR(500),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NULL ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL,
+    CONSTRAINT fk_appt_child FOREIGN KEY (child_id) REFERENCES children(id) ON DELETE CASCADE,
+    CONSTRAINT fk_appt_doctor FOREIGN KEY (doctor_id) REFERENCES users(id) ON DELETE SET NULL
+);
+CREATE INDEX idx_appt_child ON appointments(child_id);
+CREATE INDEX idx_appt_doctor ON appointments(doctor_id);
+CREATE INDEX idx_appt_datetime ON appointments(appointment_datetime);
+CREATE INDEX idx_appt_status ON appointments(status);
+
+-- ===================
+-- GROWTH RECORDS
+-- ===================
+CREATE TABLE growth_records (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    child_id BIGINT NOT NULL,
+    measurement_date DATE NOT NULL,
+    weight_kg DECIMAL(5,2) NOT NULL,
+    height_cm DECIMAL(5,2) NOT NULL,
+    head_circumference_cm DECIMAL(5,2),
+    muac_cm DECIMAL(4,1),
+    weight_for_age_z_score DECIMAL(4,2),
+    height_for_age_z_score DECIMAL(4,2),
+    weight_for_height_z_score DECIMAL(4,2),
+    bmi DECIMAL(4,1),
+    nutrition_status VARCHAR(50),
+    notes VARCHAR(1000),
+    recorded_by VARCHAR(200),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NULL ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL,
+    CONSTRAINT fk_growth_child FOREIGN KEY (child_id) REFERENCES children(id) ON DELETE CASCADE
+);
+CREATE INDEX idx_growth_child ON growth_records(child_id);
+CREATE INDEX idx_growth_date ON growth_records(measurement_date);
+CREATE INDEX idx_growth_child_date ON growth_records(child_id, measurement_date DESC);
+
+-- ===================
+-- NUTRITION PLANS
+-- ===================
+CREATE TABLE nutrition_plans (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    child_id BIGINT NOT NULL,
+    plan_date DATE NOT NULL,
+    meal_type VARCHAR(50),
+    meal_name VARCHAR(200) NOT NULL,
+    description VARCHAR(1000),
+    ingredients VARCHAR(500),
+    calories_kcal INT,
+    protein_g DECIMAL(5,2),
+    carbs_g DECIMAL(5,2),
+    fat_g DECIMAL(5,2),
+    notes VARCHAR(500),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NULL ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL,
+    CONSTRAINT fk_nutrition_child FOREIGN KEY (child_id) REFERENCES children(id) ON DELETE CASCADE
+);
+CREATE INDEX idx_nutrition_child ON nutrition_plans(child_id);
+CREATE INDEX idx_nutrition_date ON nutrition_plans(plan_date);
+
+-- ===================
+-- HEALTH RECORDS
+-- ===================
+CREATE TABLE health_records (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    child_id BIGINT NOT NULL,
+    record_type VARCHAR(50) NOT NULL CHECK (record_type IN ('VISIT','DIAGNOSIS','ALLERGY','MEDICATION','LAB_RESULT','IMMUNIZATION')),
+    title VARCHAR(200) NOT NULL,
+    description VARCHAR(2000),
+    record_date DATE NOT NULL,
+    doctor_name VARCHAR(200),
+    clinic_name VARCHAR(200),
+    document_url VARCHAR(500),
+    severity VARCHAR(20) CHECK (severity IN ('MILD','MODERATE','SEVERE')),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NULL ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL,
+    CONSTRAINT fk_health_child FOREIGN KEY (child_id) REFERENCES children(id) ON DELETE CASCADE
+);
+CREATE INDEX idx_health_child ON health_records(child_id);
+CREATE INDEX idx_health_type ON health_records(record_type);
+CREATE INDEX idx_health_date ON health_records(record_date);
+CREATE INDEX idx_health_child_type ON health_records(child_id, record_type);
+
+-- ===================
+-- AI CONVERSATIONS
+-- ===================
+CREATE TABLE ai_conversations (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    child_id BIGINT,
+    session_id VARCHAR(100),
+    user_message VARCHAR(2000) NOT NULL,
+    ai_response VARCHAR(4000) NOT NULL,
+    intent VARCHAR(100),
+    language VARCHAR(10) DEFAULT 'en',
+    response_time_ms BIGINT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NULL ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL,
+    CONSTRAINT fk_ai_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX idx_ai_user ON ai_conversations(user_id);
+CREATE INDEX idx_ai_user_created ON ai_conversations(user_id, created_at DESC);
+CREATE INDEX idx_ai_intent ON ai_conversations(intent);
+
+-- ===================
+-- NOTIFICATIONS
+-- ===================
+CREATE TABLE notifications (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    title VARCHAR(200) NOT NULL,
+    message VARCHAR(1000) NOT NULL,
+    related_entity_type VARCHAR(50),
+    related_entity_id BIGINT,
+    scheduled_for TIMESTAMP NOT NULL,
+    sent_at TIMESTAMP NULL,
+    read_at TIMESTAMP NULL,
+    channel VARCHAR(20) NOT NULL CHECK (channel IN ('PUSH','SMS','EMAIL','IN_APP')),
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','SENT','FAILED','READ')),
+    failure_reason VARCHAR(500),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NULL ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL,
+    CONSTRAINT fk_notif_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX idx_notif_user ON notifications(user_id);
+CREATE INDEX idx_notif_status ON notifications(status);
+CREATE INDEX idx_notif_scheduled ON notifications(scheduled_for);
+CREATE INDEX idx_notif_user_unread ON notifications(user_id, read_at);
+
+-- ===================
+-- FILE UPLOADS
+-- ===================
+CREATE TABLE file_uploads (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    file_name VARCHAR(255) NOT NULL,
+    original_name VARCHAR(255),
+    content_type VARCHAR(100),
+    file_size_bytes BIGINT,
+    storage_url VARCHAR(500),
+    storage_provider VARCHAR(50) DEFAULT 'local',
+    file_category VARCHAR(50),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NULL ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL,
+    CONSTRAINT fk_file_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX idx_file_user ON file_uploads(user_id);
+CREATE INDEX idx_file_category ON file_uploads(file_category);
+
+-- ===================
+-- AUDIT LOGS
+-- ===================
+CREATE TABLE audit_logs (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT,
+    action VARCHAR(100) NOT NULL,
+    entity_type VARCHAR(50),
+    entity_id BIGINT,
+    details VARCHAR(2000),
+    ip_address VARCHAR(45),
+    user_agent VARCHAR(500),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NULL ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL,
+    CONSTRAINT fk_audit_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+CREATE INDEX idx_audit_user ON audit_logs(user_id);
+CREATE INDEX idx_audit_action ON audit_logs(action);
+CREATE INDEX idx_audit_created ON audit_logs(created_at DESC);
+
+-- ===================================================================
+-- END OF V1__init_schema.sql
+-- ===================================================================
