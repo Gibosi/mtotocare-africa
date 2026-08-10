@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { appointmentApi, patientApi } from '../../api'
+import { appointmentApi, doctorApi } from '../../api'
 import { useToast } from '../../components/Toast.jsx'
 
 const STATUS = {
@@ -13,7 +13,6 @@ const STATUS = {
 export function ProviderAppointments() {
   const { showSuccess, showError } = useToast()
   const [appointments, setAppointments] = useState([])
-  const [patients, setPatients] = useState([])
   const [tab, setTab] = useState('upcoming')
   const [busy, setBusy] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -27,12 +26,8 @@ export function ProviderAppointments() {
   const load = async () => {
     setLoading(true)
     try {
-      const [a, p] = await Promise.all([
-        appointmentApi.getAll().catch(() => []),
-        patientApi.getAll().catch(() => []),
-      ])
+      const a = await doctorApi.myAppointments().catch(() => [])
       setAppointments((a || []).sort((x, y) => new Date(x.appointmentDatetime) - new Date(y.appointmentDatetime)))
-      setPatients(p || [])
     } finally {
       setLoading(false)
     }

@@ -8,13 +8,19 @@ Spring Boot 2.7.18 + Java 21 REST API for MtotoCare Africa.
 # dev (H2 in-memory, auto-seed admin)
 mvn spring-boot:run
 
-# production (MySQL)
+# production (PostgreSQL)
 SPRING_PROFILES_ACTIVE=prod \
-  DB_URL=jdbc:mysql://localhost:3306/mtotocare \
+  DB_URL=jdbc:postgresql://localhost:5432/mtotocare \
   DB_USERNAME=mtotocare \
   DB_PASSWORD=... \
   mvn spring-boot:run
 ```
+
+Deploying to Render (or Heroku/Railway): you can paste the platform's raw
+database connection string (`postgresql://user:pass@host/db`) directly as
+`DB_URL` — `RenderDatabaseUrlEnvironmentPostProcessor` auto-converts it into
+a proper JDBC URL + separate credentials at startup. A real JDBC-formatted
+URL (`jdbc:postgresql://...`) also works as-is, unchanged.
 
 Health: `http://localhost:8080/api/auth/health`
 
@@ -23,7 +29,7 @@ Health: `http://localhost:8080/api/auth/health`
 | Profile | DB | Email | AI |
 |---|---|---|---|
 | `dev` (default) | H2 in-memory | sandbox mode (.eml files) | mock |
-| `prod` | MySQL (env vars) | real Gmail SMTP | groq or openai |
+| `prod` | PostgreSQL (env vars) | real Gmail SMTP | groq or openai |
 
 Environment variables:
 - `SPRING_PROFILES_ACTIVE` — `dev` | `prod`
@@ -213,7 +219,7 @@ java -jar target/mtotocare-backend-1.0.0.jar
 - Spring Boot 2.7.18, Spring Security, Spring Data JPA
 - Java 21
 - Lombok 1.18.42
-- H2 (dev) / MySQL 8 (prod) via Flyway
+- H2 (dev) / PostgreSQL (prod) via Flyway
 - JJWT 0.11.5
 - Spring Boot Mail (Gmail SMTP)
 - Groq / OpenAI HTTP client (custom, no SDK)

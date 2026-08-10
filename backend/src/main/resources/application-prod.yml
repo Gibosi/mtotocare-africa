@@ -1,9 +1,15 @@
 spring:
+  # DB_URL accepts either a proper JDBC URL (jdbc:postgresql://host:port/db)
+  # or Render's raw "Internal/External Database URL" format
+  # (postgresql://user:pass@host/db) — RenderDatabaseUrlEnvironmentPostProcessor
+  # auto-converts the latter into proper JDBC form + separate credentials
+  # before Spring's datasource auto-config reads it, so either can be pasted
+  # directly from Render's dashboard without manual reformatting.
   datasource:
-    url: ${DB_URL:jdbc:mysql://localhost:3306/mtotocare?createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC}
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/mtotocare}
     username: ${DB_USERNAME:mtotocare}
     password: ${DB_PASSWORD:}
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    driver-class-name: org.postgresql.Driver
 
   jpa:
     hibernate:
@@ -12,7 +18,7 @@ spring:
     open-in-view: false
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.MySQLDialect
+        dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: false
 
   flyway:

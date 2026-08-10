@@ -16,10 +16,28 @@ export default function ProviderAppointmentsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [tab, setTab] = useState<'today' | 'upcoming' | 'past'>('today');
 
+  const [hasAutoSelected, setHasAutoSelected] = useState(false);
+
   const load = async () => {
     try {
       const res = await doctorsApi.myAppointments();
-      setAppointments((res.data.data || []).sort((a: any, b: any) => new Date(a.appointmentDatetime).getTime() - new Date(b.appointmentDatetime).getTime()));
+      const data = (res.data.data || []).sort((a: any, b: any) => new Date(a.appointmentDatetime).getTime() - new Date(b.appointmentDatetime).getTime());
+      setAppointments(data);
+
+      // On first load only, land on whichever tab actually has something to
+      // show, so a doctor with only a future-dated appointment doesn't land
+      // on an empty "Today" view and think nothing was booked. Don't repeat
+      // this on manual pull-to-refresh — respect whatever tab they're on.
+      if (!hasAutoSelected) {
+        setHasAutoSelected(true);
+        const now = new Date();
+        const todayStr = now.toDateString();
+        const hasToday = data.some((a: any) => new Date(a.appointmentDatetime).toDateString() === todayStr);
+        const hasUpcoming = data.some((a: any) => new Date(a.appointmentDatetime) > now && new Date(a.appointmentDatetime).toDateString() !== todayStr);
+        if (!hasToday && hasUpcoming) {
+          setTab('upcoming');
+        }
+      }
     } catch {
       setAppointments([]);
     } finally {

@@ -5,12 +5,12 @@
 -- disagreed on production databases and (depending on Hibernate settings)
 -- either silently dropped data or failed schema validation on startup.
 ALTER TABLE nutrition_plans
-    ADD COLUMN age_range VARCHAR(50) NULL AFTER child_id,
-    ADD COLUMN recommendations VARCHAR(3000) NULL AFTER meal_name,
-    ADD COLUMN foods_to_include VARCHAR(2000) NULL AFTER recommendations,
-    ADD COLUMN foods_to_avoid VARCHAR(2000) NULL AFTER foods_to_include,
-    ADD COLUMN feeding_frequency VARCHAR(200) NULL AFTER foods_to_avoid,
-    ADD COLUMN active BOOLEAN NOT NULL DEFAULT TRUE AFTER notes;
+    ADD COLUMN age_range VARCHAR(50) NULL,
+    ADD COLUMN recommendations VARCHAR(3000) NULL,
+    ADD COLUMN foods_to_include VARCHAR(2000) NULL,
+    ADD COLUMN foods_to_avoid VARCHAR(2000) NULL,
+    ADD COLUMN feeding_frequency VARCHAR(200) NULL,
+    ADD COLUMN active BOOLEAN NOT NULL DEFAULT TRUE;
 
 -- meal_name and description already existed (V1) but were unused by the
 -- entity; description's length there was smaller than what recommendations

@@ -10,13 +10,13 @@
 -- summary, and clinician-reported danger signs used for emergency
 -- detection and referral.
 ALTER TABLE growth_records
-    ADD COLUMN age_in_days INT NULL AFTER measurement_date,
-    ADD COLUMN bmi_for_age_z_score DECIMAL(4,2) NULL AFTER weight_for_height_z_score,
-    ADD COLUMN risk_level VARCHAR(20) NULL AFTER nutrition_status,
-    ADD COLUMN health_score INT NULL AFTER risk_level,
-    ADD COLUMN growth_trend VARCHAR(20) NULL AFTER health_score,
-    ADD COLUMN referral_recommended BOOLEAN NOT NULL DEFAULT FALSE AFTER growth_trend,
-    ADD COLUMN emergency_flag BOOLEAN NOT NULL DEFAULT FALSE AFTER referral_recommended,
-    ADD COLUMN oedema BOOLEAN NOT NULL DEFAULT FALSE AFTER emergency_flag,
-    ADD COLUMN severe_dehydration BOOLEAN NOT NULL DEFAULT FALSE AFTER oedema,
-    ADD COLUMN ai_summary VARCHAR(2000) NULL AFTER severe_dehydration;
+    ADD COLUMN age_in_days INT NULL,
+    ADD COLUMN bmi_for_age_z_score DECIMAL(4,2) NULL,
+    ADD COLUMN risk_level VARCHAR(20) NULL,
+    ADD COLUMN health_score INT NULL,
+    ADD COLUMN growth_trend VARCHAR(20) NULL,
+    ADD COLUMN referral_recommended BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN emergency_flag BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN oedema BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN severe_dehydration BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN ai_summary VARCHAR(2000) NULL;

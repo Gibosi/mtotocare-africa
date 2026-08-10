@@ -66,6 +66,15 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- PostgreSQL — used in production (Render's managed database is
+             Postgres). Flyway's PostgreSQL support is built into
+             flyway-core, no separate add-on module needed (unlike MySQL). -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>

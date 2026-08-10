@@ -272,7 +272,7 @@ function AddVaccinationForm({ childId, schedules, existing, onDone, theme }: { c
     try {
       await vaccinationsApi.record(childId, {
         scheduleId,
-        administeredAt: new Date(date).toISOString(),
+        administeredAt: date,
         clinicName: clinic.trim() || undefined,
       });
       showSuccess('Vaccination recorded');
@@ -330,7 +330,7 @@ function AddDiagnosisForm({ childId, doctorId, onDone, theme }: { childId: numbe
         condition: condition.trim(),
         severity,
         treatmentPlan: treatment.trim() || undefined,
-        diagnosedAt: new Date().toISOString(),
+        diagnosedAt: todayISO(),
       } as any);
       showSuccess('Diagnosis recorded');
       setTimeout(() => { onDone(); }, 1000);
