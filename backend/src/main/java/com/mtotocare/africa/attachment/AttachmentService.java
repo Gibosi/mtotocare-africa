@@ -28,6 +28,7 @@ public class AttachmentService {
 
     private final AttachmentRepository repository;
     private final UserRepository userRepository;
+    private final com.mtotocare.africa.child.ChildRepository childRepository;
 
     @Value("${app.attachments.storage-path:./uploads}")
     private String storageBasePath;
@@ -93,6 +94,15 @@ public class AttachmentService {
 
     @Transactional(readOnly = true)
     public List<AttachmentDto> listForChild(Long childId) {
+        com.mtotocare.africa.child.Child child = childRepository.findById(childId)
+                .orElseThrow(() -> new ApiException("Child not found", HttpStatus.NOT_FOUND, "CHILD_NOT_FOUND"));
+        User user = userRepository.findByEmail(SecurityUtils.getCurrentUserEmail())
+                .orElseThrow(() -> new ApiException("User not found", HttpStatus.UNAUTHORIZED, "USER_NOT_FOUND"));
+        boolean isOwner = child.getParent() != null && child.getParent().getId().equals(user.getId());
+        boolean isStaff = user.isHealthcareProvider() || SecurityUtils.hasAnyRole("ADMIN");
+        if (!isOwner && !isStaff) {
+            throw new ApiException("Access denied", HttpStatus.FORBIDDEN, "ACCESS_DENIED");
+        }
         return repository.findByChildIdAndDeletedAtIsNullOrderByCreatedAtDesc(childId)
                 .stream().map(AttachmentDto::from).collect(Collectors.toList());
     }

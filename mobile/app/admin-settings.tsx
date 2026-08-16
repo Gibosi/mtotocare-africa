@@ -119,8 +119,8 @@ export default function AdminSettingsScreen() {
 function InfoRow({ label, value, theme }: { label: string; value: string; theme: any }) {
   return (
     <View style={styles.infoRow}>
-      <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>{label}</Text>
-      <Text style={[styles.infoValue, { color: theme.text }]}>{value}</Text>
+      <Text style={[styles.infoLabel, { color: theme.colors.textSecondary }]}>{label}</Text>
+      <Text style={[styles.infoValue, { color: theme.colors.text }]}>{value}</Text>
     </View>
   );
 }
@@ -129,10 +129,10 @@ function ToggleRow({ label, description, value, onChange, theme }: { label: stri
   return (
     <View style={styles.toggleRow}>
       <View style={{ flex: 1 }}>
-        <Text style={[styles.toggleLabel, { color: theme.text }]}>{label}</Text>
-        <Text style={[styles.toggleDesc, { color: theme.textSecondary }]}>{description}</Text>
+        <Text style={[styles.toggleLabel, { color: theme.colors.text }]}>{label}</Text>
+        <Text style={[styles.toggleDesc, { color: theme.colors.textSecondary }]}>{description}</Text>
       </View>
-      <Switch value={value} onValueChange={onChange} trackColor={{ true: theme.primary, false: theme.border }} />
+      <Switch value={value} onValueChange={onChange} trackColor={{ true: theme.colors.primary, false: theme.colors.border }} />
     </View>
   );
 }

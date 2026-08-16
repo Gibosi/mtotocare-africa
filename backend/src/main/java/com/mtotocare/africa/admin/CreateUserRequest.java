@@ -11,5 +11,9 @@ public record CreateUserRequest(
         String phoneNumber,
         String password,
         String preferredLanguage,
-        List<String> roles
+        List<String> roles,
+        // Only used when roles includes a clinical role (DOCTOR/NURSE/MIDWIFE/CHW).
+        String licenseNumber,
+        String specialization,
+        Long facilityId
 ) {}

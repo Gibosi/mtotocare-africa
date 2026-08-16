@@ -173,13 +173,13 @@ function StatCard({ icon, label, value, color, onPress }: { icon: any; label: st
 function ActionCard({ icon, label, onPress, theme }: { icon: any; label: string; onPress: () => void; theme: any }) {
   return (
     <TouchableOpacity
-      style={[styles.actionCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
+      style={[styles.actionCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
       onPress={onPress}
     >
-      <View style={[styles.actionIcon, { backgroundColor: theme.featureBg }]}>
-        <Ionicons name={icon} size={20} color={theme.primary} />
+      <View style={[styles.actionIcon, { backgroundColor: theme.colors.featureBg }]}>
+        <Ionicons name={icon} size={20} color={theme.colors.primary} />
       </View>
-      <Text style={[styles.actionLabel, { color: theme.text }]}>{label}</Text>
+      <Text style={[styles.actionLabel, { color: theme.colors.text }]}>{label}</Text>
     </TouchableOpacity>
   );
 }

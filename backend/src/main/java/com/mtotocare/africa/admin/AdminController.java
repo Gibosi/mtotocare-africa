@@ -67,7 +67,18 @@ public class AdminController {
         int total = filtered.size();
         int from = Math.min(page * size, total);
         int to = Math.min(from + size, total);
-        List<UserDto> page_content = filtered.subList(from, to).stream().map(UserDto::from).toList();
+        List<UserDto> page_content = filtered.subList(from, to).stream().map(u -> {
+            UserDto dto = UserDto.from(u);
+            if (Boolean.TRUE.equals(u.getHealthcareProvider())) {
+                doctorRepository.findByUserId(u.getId()).ifPresent(d -> {
+                    dto.setDoctorId(d.getId());
+                    dto.setCredentialsVerified(d.getCredentialsVerified());
+                    dto.setLicenseNumber(d.getLicenseNumber());
+                    dto.setSpecialization(d.getSpecialization());
+                });
+            }
+            return dto;
+        }).toList();
         return ApiResponse.success(new PageResponse<>(page_content, total, (int) Math.ceil((double) total / size), size, page));
     }
 
@@ -79,6 +90,13 @@ public class AdminController {
         Set<String> roles = request.roles() != null && !request.roles().isEmpty()
                 ? new HashSet<>(request.roles())
                 : Set.of("PARENT");
+        boolean isProvider = roles.stream().anyMatch(r -> r.equals("DOCTOR") || r.equals("NURSE") || r.equals("MIDWIFE") || r.equals("CHW"));
+        if (isProvider && (request.licenseNumber() == null || request.licenseNumber().isBlank())) {
+            return ApiResponse.error("A license number is required for clinical roles", "LICENSE_REQUIRED");
+        }
+        if (isProvider && doctorRepository.existsByLicenseNumber(request.licenseNumber())) {
+            return ApiResponse.error("This license number is already registered", "LICENSE_EXISTS");
+        }
         User user = User.builder()
                 .email(request.email())
                 .fullName(request.fullName())
@@ -88,25 +106,29 @@ public class AdminController {
                 .active(true)
                 .emailVerified(true)
                 .phoneVerified(true)
-                .healthcareProvider(roles.stream().anyMatch(r -> r.equals("DOCTOR") || r.equals("NURSE") || r.equals("MIDWIFE") || r.equals("CHW")))
+                .healthcareProvider(isProvider)
                 .roles(roles)
                 .build();
         user = userRepository.save(user);
 
         // If the user has a healthcare role, also create a Doctor profile
-        boolean isProvider = roles.stream().anyMatch(r -> r.equals("DOCTOR") || r.equals("NURSE") || r.equals("MIDWIFE") || r.equals("CHW"));
         if (isProvider && !doctorRepository.findByUserId(user.getId()).isPresent()) {
-            Facility defaultFacility = facilityRepository.findAll().stream().findFirst().orElse(null);
+            Facility facility = request.facilityId() != null
+                    ? facilityRepository.findById(request.facilityId()).orElse(null)
+                    : facilityRepository.findAll().stream().findFirst().orElse(null);
             Doctor doctor = Doctor.builder()
                     .user(user)
-                    .licenseNumber("TZ-" + System.currentTimeMillis())
-                    .specialization(roles.contains("DOCTOR") ? "General Practice" : "Healthcare")
+                    .licenseNumber(request.licenseNumber().trim())
+                    .specialization(request.specialization() != null && !request.specialization().isBlank()
+                            ? request.specialization().trim()
+                            : (roles.contains("DOCTOR") ? "General Practice" : "Healthcare"))
                     .subSpecialty("")
                     .yearsOfExperience(0)
                     .bio("")
                     .acceptingNewPatients(true)
-                    .primaryFacility(defaultFacility)
+                    .primaryFacility(facility)
                     .consultationFee(0.0)
+                    .credentialsVerified(false)
                     .build();
             doctorRepository.save(doctor);
         }
@@ -250,6 +272,37 @@ public class AdminController {
         status.put("failedCount", 0);
         status.put("lastSyncAt", lastSync.orElse(null));
         return ApiResponse.success(status);
+    }
+
+    // =========== DOCTOR CREDENTIAL VERIFICATION ===========
+
+    /**
+     * Mark a healthcare worker's medical license/credentials as verified —
+     * an explicit admin action after checking their license against the
+     * relevant licensing body. New clinical accounts start unverified.
+     */
+    @PutMapping("/doctors/{id}/verify")
+    public ApiResponse<String> verifyDoctor(@PathVariable Long id, HttpServletRequest http) {
+        Doctor d = doctorRepository.findById(id)
+                .orElseThrow(() -> new com.mtotocare.africa.exception.ApiException(
+                        "Doctor not found", org.springframework.http.HttpStatus.NOT_FOUND, "DOCTOR_NOT_FOUND"));
+        d.setCredentialsVerified(true);
+        doctorRepository.save(d);
+        auditService.record("VERIFY_DOCTOR_CREDENTIALS", "Doctor", id,
+                "Verified license " + d.getLicenseNumber() + " for " + d.getUser().getFullName(), http);
+        return ApiResponse.success("Credentials verified", null);
+    }
+
+    @PutMapping("/doctors/{id}/unverify")
+    public ApiResponse<String> unverifyDoctor(@PathVariable Long id, HttpServletRequest http) {
+        Doctor d = doctorRepository.findById(id)
+                .orElseThrow(() -> new com.mtotocare.africa.exception.ApiException(
+                        "Doctor not found", org.springframework.http.HttpStatus.NOT_FOUND, "DOCTOR_NOT_FOUND"));
+        d.setCredentialsVerified(false);
+        doctorRepository.save(d);
+        auditService.record("UNVERIFY_DOCTOR_CREDENTIALS", "Doctor", id,
+                "Unverified license for " + d.getUser().getFullName(), http);
+        return ApiResponse.success("Credentials un-verified", null);
     }
 
     // =========== FACILITIES ===========

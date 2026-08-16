@@ -216,6 +216,12 @@ export const userApi = {
   deactivate: async (id) => {
     try { return ok(await apiClient.put(`/admin/users/${id}/deactivate`)) } catch (e) { err(e) }
   },
+  verifyDoctor: async (doctorId) => {
+    try { return ok(await apiClient.put(`/admin/doctors/${doctorId}/verify`)) } catch (e) { err(e) }
+  },
+  unverifyDoctor: async (doctorId) => {
+    try { return ok(await apiClient.put(`/admin/doctors/${doctorId}/unverify`)) } catch (e) { err(e) }
+  },
   delete: async (id) => {
     // Use /admin/users/{id} for delete (admin-only, audited)
     try { return ok(await apiClient.delete(`/admin/users/${id}`)) } catch (e) { err(e) }

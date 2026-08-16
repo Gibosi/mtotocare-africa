@@ -12,7 +12,7 @@ import {
   Appointment, AppointmentRequest,
   AIChatRequest, AIChatMessage,
   Notification,
-  Allergy, Medication, Diagnosis,
+  Allergy, Medication, Diagnosis, Attachment,
   HealthcareWorker, Facility,
   AuditLog, SystemSettings, User,
   PageResponse,
@@ -282,12 +282,18 @@ export const diagnosesApi = {
     apiClient.put<{ success: boolean; data: Diagnosis }>(`/diagnoses/${id}`, data),
 };
 
+// =========== ATTACHMENTS ===========
+export const attachmentsApi = {
+  getForChild: (childId: number) =>
+    apiClient.get<{ success: boolean; data: Attachment[] }>(`/attachments/child/${childId}`),
+};
+
 // =========== ADMIN ===========
 export const adminApi = {
   // Users
   getUsers: (params?: { role?: string; active?: boolean; query?: string }) =>
     apiClient.get<{ success: boolean; data: PageResponse<User> }>('/admin/users', { params }),
-  createUser: (data: RegisterRequest & { roles: string[] }) =>
+  createUser: (data: RegisterRequest & { roles: string[]; licenseNumber?: string; specialization?: string; facilityId?: number }) =>
     apiClient.post<{ success: boolean; data: User }>('/admin/users', data),
   // Audit logs
   getAuditLogs: (params?: { userId?: number; action?: string; from?: string; to?: string }) =>
@@ -303,6 +309,11 @@ export const adminApi = {
   // Sync monitoring
   getSyncStatus: () =>
     apiClient.get<{ success: boolean; data: any }>('/admin/sync/status'),
+  // Doctor credential verification
+  verifyDoctorCredentials: (doctorId: number) =>
+    apiClient.put<{ success: boolean }>(`/admin/doctors/${doctorId}/verify`),
+  unverifyDoctorCredentials: (doctorId: number) =>
+    apiClient.put<{ success: boolean }>(`/admin/doctors/${doctorId}/unverify`),
   // Vaccine schedule catalog (EPI list, not per-child records)
   getVaccineSchedules: () =>
     apiClient.get<{ success: boolean; data: VaccinationSchedule[] }>('/admin/vaccine-schedules'),

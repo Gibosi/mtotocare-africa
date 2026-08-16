@@ -21,6 +21,8 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final com.mtotocare.africa.child.ChildRepository childRepository;
+    private final com.mtotocare.africa.doctor.DoctorRepository doctorRepository;
+    private final com.mtotocare.africa.facility.FacilityRepository facilityRepository;
 
     @Transactional(readOnly = true)
     public UserDto getByEmail(String email) {
@@ -81,6 +83,15 @@ public class UserService {
         if (roles.isEmpty()) {
             throw new ApiException("At least one role is required", HttpStatus.BAD_REQUEST, "ROLE_REQUIRED");
         }
+        boolean isProvider = roles.stream().anyMatch(r ->
+                r.equals("DOCTOR") || r.equals("NURSE") || r.equals("MIDWIFE")
+                        || r.equals("CHW") || r.equals("HEALTHCARE_PROVIDER"));
+        if (isProvider && (request.getLicenseNumber() == null || request.getLicenseNumber().isBlank())) {
+            throw new ApiException("A license number is required for clinical roles", HttpStatus.BAD_REQUEST, "LICENSE_REQUIRED");
+        }
+        if (isProvider && doctorRepository.existsByLicenseNumber(request.getLicenseNumber())) {
+            throw new ApiException("This license number is already registered", HttpStatus.CONFLICT, "LICENSE_EXISTS");
+        }
 
         User user = User.builder()
                 .email(request.getEmail().toLowerCase().trim())
@@ -93,13 +104,37 @@ public class UserService {
                 .emailVerified(false)
                 .phoneVerified(false)
                 // Auto-mark as healthcare provider if any provider role is selected
-                .healthcareProvider(roles.stream().anyMatch(r ->
-                        r.equals("DOCTOR") || r.equals("NURSE") || r.equals("MIDWIFE")
-                                || r.equals("CHW") || r.equals("HEALTHCARE_PROVIDER")))
+                .healthcareProvider(isProvider)
                 .roles(roles)
                 .build();
 
         user = userRepository.save(user);
+
+        // Same as AdminController's /admin/users path: a clinical role also
+        // needs a Doctor profile (license, specialization, facility) or the
+        // account can't actually function as a healthcare worker anywhere
+        // in the app (no appointments, no patient list, etc.)
+        if (isProvider && doctorRepository.findByUserId(user.getId()).isEmpty()) {
+            com.mtotocare.africa.facility.Facility facility = request.getFacilityId() != null
+                    ? facilityRepository.findById(request.getFacilityId()).orElse(null)
+                    : facilityRepository.findAll().stream().findFirst().orElse(null);
+            com.mtotocare.africa.doctor.Doctor doctor = com.mtotocare.africa.doctor.Doctor.builder()
+                    .user(user)
+                    .licenseNumber(request.getLicenseNumber().trim())
+                    .specialization(request.getSpecialization() != null && !request.getSpecialization().isBlank()
+                            ? request.getSpecialization().trim()
+                            : (roles.contains("DOCTOR") ? "General Practice" : "Healthcare"))
+                    .subSpecialty("")
+                    .yearsOfExperience(0)
+                    .bio("")
+                    .acceptingNewPatients(true)
+                    .primaryFacility(facility)
+                    .consultationFee(0.0)
+                    .credentialsVerified(false)
+                    .build();
+            doctorRepository.save(doctor);
+        }
+
         return UserDto.from(user);
     }
 

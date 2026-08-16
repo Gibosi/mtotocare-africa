@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { userApi } from '../../api'
+import { userApi, facilityApi } from '../../api'
 import { useLanguage } from '../../i18n.jsx'
 import { useToast } from '../../components/Toast.jsx'
 
 const ALL_ROLES = ['PARENT', 'DOCTOR', 'NURSE', 'MIDWIFE', 'CHW', 'HEALTHCARE_PROVIDER', 'ADMIN']
+const CLINICAL_ROLES = ['DOCTOR', 'NURSE', 'MIDWIFE', 'CHW']
 
 const EMPTY_FORM = {
   fullName: '',
@@ -12,6 +13,9 @@ const EMPTY_FORM = {
   password: '',
   preferredLanguage: 'en',
   roles: ['PARENT'],
+  licenseNumber: '',
+  specialization: '',
+  facilityId: '',
 }
 
 export function AdminUsers() {
@@ -27,8 +31,10 @@ export function AdminUsers() {
   const [creating, setCreating] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
   const [savingForm, setSavingForm] = useState(false)
+  const [facilities, setFacilities] = useState([])
 
   useEffect(() => { load() }, [])
+  useEffect(() => { facilityApi.getAll().then(setFacilities).catch(() => setFacilities([])) }, [])
 
   const load = async () => {
     setLoading(true)
@@ -63,6 +69,20 @@ export function AdminUsers() {
       await load()
     } catch (e) {
       showError(e.message || 'Could not update user')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const toggleVerified = async (u) => {
+    setBusy(`verify-${u.doctorId}`)
+    try {
+      if (u.credentialsVerified) await userApi.unverifyDoctor(u.doctorId)
+      else await userApi.verifyDoctor(u.doctorId)
+      showSuccess(u.credentialsVerified ? 'Marked as unverified' : 'Credentials verified ✓')
+      await load()
+    } catch (e) {
+      showError(e.message || 'Could not update verification status')
     } finally {
       setBusy(null)
     }
@@ -128,6 +148,8 @@ export function AdminUsers() {
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email.trim())) { showError('Please enter a valid email'); return }
     if (!form.password || form.password.length < 8) { showError('Password must be at least 8 characters'); return }
     if (!form.roles || form.roles.length === 0) { showError('Pick at least one role'); return }
+    const isClinical = form.roles.some(r => CLINICAL_ROLES.includes(r))
+    if (isClinical && !form.licenseNumber.trim()) { showError('A license number is required for clinical roles'); return }
 
     setSavingForm(true)
     try {
@@ -138,6 +160,9 @@ export function AdminUsers() {
         password: form.password,
         preferredLanguage: form.preferredLanguage,
         roles: form.roles,
+        licenseNumber: isClinical ? form.licenseNumber.trim() : undefined,
+        specialization: isClinical ? form.specialization.trim() || undefined : undefined,
+        facilityId: isClinical && form.facilityId ? Number(form.facilityId) : undefined,
       })
       showSuccess(t('users.userCreated') + (created?.email ? ` — ${created.email}` : ''))
       closeCreate()
@@ -227,6 +252,20 @@ export function AdminUsers() {
                           }>{r}</span>
                         ))}
                       </div>
+                      {u.doctorId && (
+                        <button
+                          onClick={() => toggleVerified(u)}
+                          disabled={busy === `verify-${u.doctorId}`}
+                          className={`mt-1 text-[11px] font-semibold px-2 py-0.5 rounded border ${
+                            u.credentialsVerified
+                              ? 'text-green-700 bg-green-50 border-green-200'
+                              : 'text-amber-700 bg-amber-50 border-amber-200'
+                          }`}
+                          title={u.licenseNumber ? `License: ${u.licenseNumber}` : ''}
+                        >
+                          {u.credentialsVerified ? '✓ Credentials verified' : '⚠ Unverified — click to verify'}
+                        </button>
+                      )}
                     </td>
                     <td className="table-td">
                       {u.active ? <span className="badge-green">{t('users.active') || 'Active'}</span> : <span className="badge-gray">{t('users.inactive') || 'Inactive'}</span>}
@@ -394,6 +433,47 @@ export function AdminUsers() {
                   {form.roles.length} selected. PARENT = family app, DOCTOR/NURSE/MIDWIFE/CHW/HEALTHCARE_PROVIDER = clinic staff, ADMIN = portal.
                 </p>
               </div>
+
+              {form.roles.some(r => CLINICAL_ROLES.includes(r)) && (
+                <div className="border border-amber-200 bg-amber-50 rounded-lg p-3 space-y-3">
+                  <p className="text-xs text-amber-700 font-medium">
+                    Clinical role selected — a real medical license number is required.
+                    The account starts as unverified; verify it from the users list after
+                    checking the license against the licensing body.
+                  </p>
+                  <div>
+                    <label className="label">License number *</label>
+                    <input
+                      className="input"
+                      value={form.licenseNumber}
+                      onChange={e => setForm({ ...form, licenseNumber: e.target.value })}
+                      placeholder="e.g. TZ-MED-12345"
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Specialization</label>
+                    <input
+                      className="input"
+                      value={form.specialization}
+                      onChange={e => setForm({ ...form, specialization: e.target.value })}
+                      placeholder="e.g. Pediatrics"
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Primary facility</label>
+                    <select
+                      className="input"
+                      value={form.facilityId}
+                      onChange={e => setForm({ ...form, facilityId: e.target.value })}
+                    >
+                      <option value="">— Select a facility —</option>
+                      {facilities.map(f => (
+                        <option key={f.id} value={f.id}>{f.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end gap-2 mt-6">

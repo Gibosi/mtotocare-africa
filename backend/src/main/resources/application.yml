@@ -64,7 +64,7 @@ mtotocare:
   ai:
     provider: ${AI_PROVIDER:groq}             # groq | openai | mock
     api-key: ${GROQ_API_KEY:}
-    model: ${AI_MODEL:}                       # leave blank for default (llama-3.3-70b-versatile)
+    model: ${AI_MODEL:}                       # leave blank for default (openai/gpt-oss-120b)
     timeout-ms: 20000
     max-tokens: 600
     temperature: 0.4

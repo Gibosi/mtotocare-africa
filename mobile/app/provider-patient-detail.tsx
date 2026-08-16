@@ -201,13 +201,13 @@ export default function PatientDetailScreen() {
 function ActionBtn({ icon, label, onPress, theme }: { icon: any; label: string; onPress: () => void; theme: any }) {
   return (
     <TouchableOpacity
-      style={[styles.actionBtn, { backgroundColor: theme.surface, borderColor: theme.border }]}
+      style={[styles.actionBtn, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
       onPress={onPress}
     >
-      <View style={[styles.actionIcon, { backgroundColor: theme.featureBg }]}>
-        <Ionicons name={icon} size={18} color={theme.primary} />
+      <View style={[styles.actionIcon, { backgroundColor: theme.colors.featureBg }]}>
+        <Ionicons name={icon} size={18} color={theme.colors.primary} />
       </View>
-      <Text style={[styles.actionLabel, { color: theme.text }]}>{label}</Text>
+      <Text style={[styles.actionLabel, { color: theme.colors.text }]}>{label}</Text>
     </TouchableOpacity>
   );
 }
@@ -242,7 +242,7 @@ function AddGrowthForm({ childId, onDone, theme }: { childId: number; onDone: ()
 
   return (
     <View>
-      <Text style={[styles.section, { color: theme.text }]}>Add Growth Record</Text>
+      <Text style={[styles.section, { color: theme.colors.text }]}>Add Growth Record</Text>
       <Input label="Date" value={date} onChangeText={setDate} placeholder="YYYY-MM-DD" />
       <Input label="Weight (kg)" value={weight} onChangeText={setWeight} keyboardType="decimal-pad" placeholder="3.2" />
       <Input label="Height (cm)" value={height} onChangeText={setHeight} keyboardType="decimal-pad" placeholder="50" />
@@ -286,20 +286,20 @@ function AddVaccinationForm({ childId, schedules, existing, onDone, theme }: { c
 
   return (
     <View>
-      <Text style={[styles.section, { color: theme.text }]}>Record Vaccination</Text>
-      <Text style={{ color: theme.textSecondary, fontSize: 13, marginBottom: 8 }}>Choose vaccine:</Text>
-      {available.length === 0 ? <Text style={{ color: theme.textSecondary }}>All scheduled vaccines done</Text> : available.map(s => (
+      <Text style={[styles.section, { color: theme.colors.text }]}>Record Vaccination</Text>
+      <Text style={{ color: theme.colors.textSecondary, fontSize: 13, marginBottom: 8 }}>Choose vaccine:</Text>
+      {available.length === 0 ? <Text style={{ color: theme.colors.textSecondary }}>All scheduled vaccines done</Text> : available.map(s => (
         <TouchableOpacity
           key={s.id}
           style={{
             padding: 12, borderRadius: 8, borderWidth: 1, marginBottom: 6,
-            borderColor: scheduleId === s.id ? theme.primary : theme.border,
-            backgroundColor: scheduleId === s.id ? theme.featureBg : theme.surface,
+            borderColor: scheduleId === s.id ? theme.colors.primary : theme.colors.border,
+            backgroundColor: scheduleId === s.id ? theme.colors.featureBg : theme.colors.surface,
           }}
           onPress={() => setScheduleId(s.id)}
         >
-          <Text style={{ color: theme.text, fontWeight: '500' }}>{s.vaccineName}</Text>
-          <Text style={{ color: theme.textSecondary, fontSize: 12 }}>{s.vaccineCode}</Text>
+          <Text style={{ color: theme.colors.text, fontWeight: '500' }}>{s.vaccineName}</Text>
+          <Text style={{ color: theme.colors.textSecondary, fontSize: 12 }}>{s.vaccineCode}</Text>
         </TouchableOpacity>
       ))}
       <Input label="Date administered" value={date} onChangeText={setDate} placeholder="YYYY-MM-DD" containerStyle={{ marginTop: 8 }} />
@@ -343,21 +343,21 @@ function AddDiagnosisForm({ childId, doctorId, onDone, theme }: { childId: numbe
 
   return (
     <View>
-      <Text style={[styles.section, { color: theme.text }]}>Record Diagnosis</Text>
+      <Text style={[styles.section, { color: theme.colors.text }]}>Record Diagnosis</Text>
       <Input label="Condition" value={condition} onChangeText={setCondition} placeholder="e.g. Upper respiratory infection" />
-      <Text style={{ color: theme.textSecondary, fontSize: 13, marginBottom: 6, marginTop: 8 }}>Severity</Text>
+      <Text style={{ color: theme.colors.textSecondary, fontSize: 13, marginBottom: 6, marginTop: 8 }}>Severity</Text>
       <View style={{ flexDirection: 'row', gap: 8 }}>
         {(['MILD', 'MODERATE', 'SEVERE'] as const).map(s => (
           <TouchableOpacity
             key={s}
             style={{
               flex: 1, padding: 8, borderRadius: 8, borderWidth: 1, alignItems: 'center',
-              borderColor: severity === s ? theme.primary : theme.border,
-              backgroundColor: severity === s ? theme.featureBg : theme.surface,
+              borderColor: severity === s ? theme.colors.primary : theme.colors.border,
+              backgroundColor: severity === s ? theme.colors.featureBg : theme.colors.surface,
             }}
             onPress={() => setSeverity(s)}
           >
-            <Text style={{ color: severity === s ? theme.primary : theme.text, fontWeight: '600', fontSize: 12 }}>{s}</Text>
+            <Text style={{ color: severity === s ? theme.colors.primary : theme.colors.text, fontWeight: '600', fontSize: 12 }}>{s}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -402,7 +402,7 @@ function AddMedicationForm({ childId, onDone, theme }: { childId: number; onDone
 
   return (
     <View>
-      <Text style={[styles.section, { color: theme.text }]}>Prescribe Medication</Text>
+      <Text style={[styles.section, { color: theme.colors.text }]}>Prescribe Medication</Text>
       <Input label="Medication name" value={name} onChangeText={setName} placeholder="e.g. Amoxicillin" />
       <Input label="Dosage" value={dosage} onChangeText={setDosage} placeholder="e.g. 5ml" />
       <Input label="Frequency" value={frequency} onChangeText={setFrequency} placeholder="e.g. 3 times daily" />
@@ -444,22 +444,22 @@ function AddAllergyForm({ childId, onDone, theme }: { childId: number; onDone: (
 
   return (
     <View>
-      <Text style={[styles.section, { color: theme.text }]}>Add Allergy</Text>
+      <Text style={[styles.section, { color: theme.colors.text }]}>Add Allergy</Text>
       <Input label="Allergen" value={allergen} onChangeText={setAllergen} placeholder="e.g. Peanuts" />
       <Input label="Reaction" value={reaction} onChangeText={setReaction} placeholder="e.g. Hives, swelling" multiline />
-      <Text style={{ color: theme.textSecondary, fontSize: 13, marginBottom: 6, marginTop: 8 }}>Severity</Text>
+      <Text style={{ color: theme.colors.textSecondary, fontSize: 13, marginBottom: 6, marginTop: 8 }}>Severity</Text>
       <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
         {(['MILD', 'MODERATE', 'SEVERE', 'CRITICAL'] as const).map(s => (
           <TouchableOpacity
             key={s}
             style={{
               paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, borderWidth: 1,
-              borderColor: severity === s ? theme.primary : theme.border,
-              backgroundColor: severity === s ? theme.featureBg : theme.surface,
+              borderColor: severity === s ? theme.colors.primary : theme.colors.border,
+              backgroundColor: severity === s ? theme.colors.featureBg : theme.colors.surface,
             }}
             onPress={() => setSeverity(s)}
           >
-            <Text style={{ color: severity === s ? theme.primary : theme.text, fontWeight: '600', fontSize: 12 }}>{s}</Text>
+            <Text style={{ color: severity === s ? theme.colors.primary : theme.colors.text, fontWeight: '600', fontSize: 12 }}>{s}</Text>
           </TouchableOpacity>
         ))}
       </View>

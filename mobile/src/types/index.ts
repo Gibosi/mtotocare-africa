@@ -33,6 +33,11 @@ export interface User {
   profilePictureUrl?: string;
   createdAt?: string;
   lastLoginAt?: string;
+  /** Populated by the admin user-list endpoint for healthcare-provider users. */
+  doctorId?: number;
+  credentialsVerified?: boolean;
+  licenseNumber?: string;
+  specialization?: string;
 }
 
 export interface AuthResponse {
@@ -247,6 +252,22 @@ export interface Diagnosis {
   diagnosedAt: string;
   treatmentPlan?: string;
   notes?: string;
+}
+
+export interface Attachment {
+  id: number;
+  childId: number;
+  entityType?: string;
+  entityId?: number;
+  fileName: string;
+  originalFileName?: string;
+  contentType?: string;
+  fileSizeBytes?: number;
+  storagePath?: string;
+  publicUrl?: string;
+  attachmentType?: string;
+  category?: string;
+  description?: string;
 }
 
 // =========== PROVIDER (HEALTHCARE WORKER) ===========

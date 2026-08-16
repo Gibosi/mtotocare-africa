@@ -505,3 +505,177 @@ run on PostgreSQL, since it's Render's native free offering.
 ## Not changed
 Dev profile (H2 in-memory) is untouched — it doesn't run Flyway at all,
 so it was never affected by the MySQL/Postgres question either way.
+
+---
+
+# Follow-up: AI relevance, parent-healthworker visibility, security audit (2026-08-10)
+
+## AI Assistant — real fixes, not just the missing API key from before
+- **Found the most likely root cause of "AI reply doesn't match what was asked":**
+  the model hardcoded in `AIClient.java` (`llama-3.3-70b-versatile`) was
+  deprecated by Groq (announced June 17, 2026). If your account is past
+  the shutdown date, every real API call fails outright — silently
+  falling back to a crude 7-template keyword-matcher, which explains
+  generic, off-topic replies. Updated to Groq's current recommended
+  replacement, `openai/gpt-oss-120b`.
+- **Fixed a real bug**: the Swahili system prompt checked
+  `"M".equals(gender)` to decide "mvulana" (boy) vs "msichana" (girl), but
+  gender is stored as `"MALE"`/`"FEMALE"` — so it always said "girl" in
+  Swahili, even for boys. Fixed to `"MALE".equals(gender)`.
+- **New: `ChildHealthKnowledgeBase.java`** — a structured, WHO/Tanzania
+  Ministry of Health-aligned knowledge base (14 topics: vaccination,
+  nutrition, fever, diarrhea, cough/cold, growth, pregnancy, malnutrition,
+  development, breastfeeding, skin/rash, sleep, first aid, hygiene), each
+  in English and Swahili. This is injected into the **real AI's system
+  prompt** for the detected topic (so it answers with the specific,
+  Tanzania-relevant facts requested rather than generic advice), and also
+  powers a dramatically better **offline fallback** for when no AI
+  provider is reachable — replacing the old 7-template system with much
+  more specific content across all 14 topics, plus a smarter default reply
+  when the topic doesn't match anything (points at what it *can* help
+  with, instead of a dead-end non-answer).
+- Expanded `detectIntent()` from 7 to 14 topic categories with many more
+  bilingual keywords, so more questions get properly routed instead of
+  falling into the generic bucket.
+- Added an explicit instruction to both the streaming and non-streaming
+  system prompts: answer the specific question asked, don't default to a
+  generic overview; a plain greeting gets a brief greeting back, not
+  unrelated health advice — directly addressing "reply is not the same as
+  what asked."
+
+## Parent ↔ health worker visibility — the actual "connection" gap
+Audited what a parent can see of what a health worker has done for their
+child, since the pieces existed but weren't all connected:
+- **"Health Visits" and "Lab Results" in the parent app's Medical Records
+  screen were permanent, hardcoded stub messages** ("Visit history will
+  appear here...") — even though doctors can already record diagnoses via
+  the provider app, and lab-result file uploads already exist as a
+  backend feature (`attachments` with `category=LAB_RESULT`), neither was
+  ever actually surfaced to the parent. Wired both up for real: "Health
+  Visits" now shows the child's actual diagnosis history (condition,
+  severity, treating doctor, treatment plan) and "Lab Results" shows
+  uploaded lab documents.
+- Added the missing mobile `Attachment` type and `attachmentsApi` needed
+  to support this.
+
+## Security: missing ownership checks (found while wiring the above)
+While connecting the parent app to `GET /diagnoses/child/{id}` and
+`GET /attachments/child/{id}`, found **neither endpoint checked that the
+caller was actually allowed to see that child's data** — any authenticated
+user could view any child's diagnoses or attachments (including lab
+results, birth certificates) by ID. Audited every other `getForChild`-style
+endpoint for the same gap and fixed all of them found lacking it:
+`AttachmentService`, `DiagnosisService`, `MedicationService`,
+`AllergyService`, `GrowthService`, `HealthRecordService`. All now verify
+the caller is either the child's parent or clinical/admin staff before
+returning data. (`DevelopmentMilestoneService` already had this check —
+confirmed, not modified.)
+
+## Widespread invisible-UI bug — found via systematic sweep, not by chance
+Same root-cause pattern as two bugs fixed in earlier rounds
+(`theme.typography` missing, `theme.X` vs `theme.colors.X` in
+`AppointmentCard`) — but this time swept the **entire** mobile codebase
+for every remaining instance instead of fixing one-off as found. Result:
+**57 more instances across 6 files** — admin dashboard, provider dashboard,
+provider profile, admin settings, admin sync status, and all 5 "Add X"
+forms in the provider patient-detail screen. Every one of these accessed
+theme colors as `theme.text`/`theme.primary`/etc. instead of
+`theme.colors.text`/`theme.colors.primary`, silently resolving to
+`undefined` — meaning text, icons, and borders across some of the most-used
+screens in the app (both admin and provider dashboards) were rendering
+with broken/invisible colors rather than the intended theme, with no error
+or crash to signal it. Fixed all 57 with a verified, targeted replacement
+(re-checked afterward that zero instances remain anywhere in the codebase).
+
+## Final verification
+- Full mobile `tsc --noEmit`: 0 errors (fresh reinstall).
+- Full web `vite build`: clean (fresh reinstall).
+- Full backend brace/paren sweep: clean (one confirmed false positive from
+  literal `)` characters in numbered-list strings, verified harmless
+  repeatedly this session).
+- Full endpoint cross-reference (163+ backend routes vs. every API call in
+  both clients): 100% match, no orphaned client calls.
+
+## Honest scope note
+This pass focused on the concrete, verifiable issues raised (AI relevance,
+parent/health-worker data visibility, and — since I was already auditing
+data-access code — a security sweep and a systematic UI-bug sweep that
+both turned out to be far more valuable than anticipated). A full manual
+walkthrough of literally every admin and health-worker screen against a
+complete "what should this role be able to do" checklist is a larger
+exercise than fits in one pass; the endpoint-level audit above confirms
+every existing UI action has working backend support, but doesn't
+guarantee every activity a real admin or clinician would eventually want
+already has a UI built for it (e.g., healthcare-worker credential
+verification/approval workflow, a unified cross-module patient timeline,
+and bulk/CSV reporting exports were not found to exist and were not built
+in this pass — worth a dedicated follow-up if needed).
+
+---
+
+# Follow-up: healthcare-worker credential verification workflow (2026-08-11)
+
+Addressed the first item from the "honest gap" list: a real verification
+workflow for clinical accounts.
+
+## What was found
+Only admins can create clinical-role accounts (a reasonable gate already
+in place) — but the actual license-number field was being **auto-generated
+as a fake placeholder** (`"TZ-" + System.currentTimeMillis()`) instead of
+capturing the healthcare worker's real medical license. There was no
+concept of "verified" at all — a fabricated ID looked identical to a real,
+checked one everywhere in the system.
+
+While fixing this, found a second, separate account-creation code path
+(`UserService.createUser`, backing `POST /users` — unused by any current
+UI, both web and mobile call `POST /admin/users` instead) that had an even
+worse version of the same gap: it assigned clinical roles without creating
+a `Doctor` profile at all, meaning such an account would have the DOCTOR
+role but be completely non-functional as a doctor (no appointments, not
+listed for booking, etc.) — a latent trap for any future code that used
+this endpoint. Fixed both paths consistently.
+
+## What changed
+- **`Doctor.credentialsVerified`** (new column, migration `V17`) — defaults
+  `false` for every new and existing account.
+- Both user-creation paths now **require a real license number** for
+  clinical roles (rejected with a clear error if missing or already
+  registered to someone else), accept a specialization and a specific
+  facility selection (previously always silently grabbed whichever
+  facility happened to be first in the database), and create the account
+  as unverified.
+- New endpoints: `PUT /admin/doctors/{id}/verify` and `/unverify` —
+  audit-logged, admin-only.
+- **Web**: the admin "Create User" form now shows a license number
+  (required), specialization, and facility picker whenever a clinical role
+  is checked, with a clear note that the account starts unverified. The
+  users table shows a "✓ Credentials verified" / "⚠ Unverified — click to
+  verify" toggle badge for every clinical-role user.
+- **Mobile**: admin previously had **no way to create a user at all**
+  (view/activate/deactivate/delete only) — built the missing create-user
+  form from scratch, matching the web version (role picker, conditional
+  license/specialization/facility fields, validation), plus the same
+  verification badge/toggle on each user card.
+
+## Also fixed while in this file
+`database/schema.sql` — the standalone reference doc — had **57 inline
+`INDEX` clauses inside `CREATE TABLE` statements**, a MySQL-only pattern
+that PostgreSQL does not support at all. This was missed during the
+MySQL→PostgreSQL port two rounds ago (the actual Flyway migrations were
+already clean; this was isolated to the reference doc) — meaning the exact
+`psql -f schema.sql` command given in the README at the time would have
+failed immediately on the first table. Converted all 57 to separate
+`CREATE INDEX` statements after each table, verified table count (30) and
+paren balance both check out, and confirmed no dangling trailing commas
+from the extraction.
+
+## Verification
+Full mobile `tsc --noEmit`: 0 errors (fresh reinstall). Full web
+`vite build`: clean (fresh reinstall). Full backend brace/paren sweep:
+clean (one confirmed-harmless false positive, as in every previous round).
+
+## Still open from the original "honest gap" list
+Unified cross-module patient timeline, and bulk/CSV reporting exports —
+not addressed this round; the verification workflow above and the
+schema.sql fix took priority as the more safety-relevant and more broadly
+impactful items respectively.

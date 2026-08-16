@@ -76,7 +76,7 @@ public class AIService {
         context.append(sanitizedMessage);
 
         // Try the real LLM first; fall back to the safe offline response.
-        String response = callRealAI(context.toString(), request.getChildId(), language);
+        String response = callRealAI(context.toString(), request.getChildId(), language, intent);
         if (response == null || response.isBlank()) {
             response = generateSafeResponse(sanitizedMessage, language, intent, child);
         }
@@ -132,7 +132,7 @@ public class AIService {
                 sink.onChunk(chunk);
             };
             boolean streamed = aiClient.streamChatWithPrompts(
-                    buildSystemPrompt(language, child), context.toString(), chunkConsumer);
+                    buildSystemPrompt(language, child, intent), context.toString(), chunkConsumer);
 
             String fullResponse;
             if (!streamed || accumulator.length() == 0) {
@@ -157,7 +157,7 @@ public class AIService {
         }
     }
 
-    private String buildSystemPrompt(String language, Child child) {
+    private String buildSystemPrompt(String language, Child child, String intent) {
         boolean sw = "sw".equals(language);
         StringBuilder system = new StringBuilder();
         system.append(sw
@@ -175,6 +175,17 @@ public class AIService {
                         .append("MALE".equals(gender) ? "boy" : "girl").append("). ");
             }
         }
+        String knowledge = ChildHealthKnowledgeBase.get(intent, language);
+        if (knowledge != null) {
+            system.append(sw
+                    ? "Maelezo ya rejea kwa mada hii (tumia kama msingi, si lazima kunukuu neno kwa neno): "
+                    : "Reference facts for this topic (use to ground your answer — no need to quote verbatim): ");
+            system.append(knowledge).append(" ");
+        }
+        system.append(sw
+                ? "MUHIMU: Jibu swali hasa alilouliza mtumiaji, si muhtasari wa jumla. Kama ni salamu tu, mkaribishe kwa ufupi."
+                : "IMPORTANT: Answer the specific question asked, not a generic overview. If it's just a greeting, " +
+                  "greet back briefly and ask what you can help with.");
         return system.toString();
     }
 
@@ -229,14 +240,28 @@ public class AIService {
 
     private String detectIntent(String message) {
         String lower = message.toLowerCase(Locale.ROOT);
-        if (lower.contains("vaccin") || lower.contains("chanjo")) return "VACCINATION";
-        if (lower.contains("food") || lower.contains("eat") || lower.contains("nutrition") || lower.contains("chakula")) return "NUTRITION";
-        if (lower.contains("fever") || lower.contains("temperature") || lower.contains("homa")) return "FEVER";
-        if (lower.contains("growth") || lower.contains("weight") || lower.contains("height") || lower.contains("ukuaji")) return "GROWTH";
-        if (lower.contains("pregnan") || lower.contains("mimba") || lower.contains("expecting")) return "PREGNANCY";
-        if (lower.contains("cough") || lower.contains("cold") || lower.contains("kikohozi")) return "COUGH_COLD";
-        if (lower.contains("diarr") || lower.contains("kuharisha")) return "DIARRHEA";
+        if (containsAny(lower, "vaccin", "immuniz", "chanjo")) return "VACCINATION";
+        if (containsAny(lower, "malnutri", "wasting", "stunt", "oedema", "edema", "kudhoofika", "kudumaa", "utapiamlo")) return "MALNUTRITION";
+        if (containsAny(lower, "breastfe", "breast milk", "nyonyesha", "maziwa ya mama")) return "BREASTFEEDING";
+        if (containsAny(lower, "food", "eat", "nutrition", "feed", "meal", "chakula", "lishe", "kulisha")) return "NUTRITION";
+        if (containsAny(lower, "fever", "temperature", "hot body", "homa", "joto la mwili")) return "FEVER";
+        if (containsAny(lower, "diarr", "loose stool", "kuharisha", "kuhara")) return "DIARRHEA";
+        if (containsAny(lower, "cough", "cold", "flu", "kikohozi", "mafua")) return "COUGH_COLD";
+        if (containsAny(lower, "rash", "skin", "itch", "vipele", "ngozi")) return "SKIN_RASH";
+        if (containsAny(lower, "sleep", "nap", "usingizi", "kulala")) return "SLEEP";
+        if (containsAny(lower, "cut", "burn", "injur", "wound", "bleed", "kuungua", "jeraha", "kukatika")) return "INJURY_FIRST_AID";
+        if (containsAny(lower, "wash hand", "hygien", "clean", "kunawa", "usafi")) return "HYGIENE";
+        if (containsAny(lower, "milestone", "development", "talk", "walk", "crawl", "sit up", "ukuaji wa akili", "hatua za ukuaji")) return "DEVELOPMENT";
+        if (containsAny(lower, "growth", "weight", "height", "muac", "ukuaji", "uzito", "urefu")) return "GROWTH";
+        if (containsAny(lower, "pregnan", "anc", "antenatal", "mimba", "expecting", "ujauzito")) return "PREGNANCY";
         return "GENERAL";
+    }
+
+    private boolean containsAny(String haystack, String... needles) {
+        for (String n : needles) {
+            if (haystack.contains(n)) return true;
+        }
+        return false;
     }
 
     private String generateSafeResponse(String message, String language, String intent, Child child) {
@@ -251,106 +276,33 @@ public class AIService {
                 : "For your " + ageMonths + "-month-old child:\n\n");
         }
 
-        switch (intent) {
-            case "VACCINATION":
-                response.append(isSwahili
-                    ? "Chanjo ni muhimu kwa kulinda mtoto wako dhidi ya magonjwa. " +
-                      "Tanzania ina mpango wa chanjo wa EPI unaojumuisha chanjo 13 za msingi. " +
-                      "Hakikisha unafuata ratiba ya chanjo iliyopendekezwa. " +
-                      "Wasiliana na kituo cha afya kilicho karibu kwa ratiba kamili."
-                    : "Vaccinations protect your child from serious diseases. " +
-                      "Tanzania's EPI schedule includes 13 essential vaccines. " +
-                      "Follow the recommended timeline. " +
-                      "Contact your nearest health facility for the complete schedule.");
-                break;
-            case "NUTRITION":
-                response.append(isSwahili
-                    ? "Lishe bora ni muhimu kwa ukuaji wa mtoto. " +
-                      "Watoto chini ya miezi 6 wanahitaji maziwa ya mama pekee. " +
-                      "Baada ya hapo, anza na vyakula vya ziada wakati huo huo. " +
-                      "Jumuisha mboga, matunda, nafaka, na protini katika lishe yao."
-                    : "Good nutrition is essential for child development. " +
-                      "Children under 6 months need exclusive breastfeeding. " +
-                      "After that, introduce complementary foods while continuing breastfeeding. " +
-                      "Include vegetables, fruits, grains, and protein in their diet.");
-                break;
-            case "FEVER":
-                response.append(isSwahili
-                    ? "Homa ni dalili ya maambukizi. Kwa watoto chini ya miezi 3, wasiliana na daktari HARAKA. " +
-                      "Kwa watoto wakubwa, kama homa ni juu ya 38°C, vipaumbele ni: kumpa maji mengi, " +
-                      "kumvisha mavazi mepesi, na kumhudumia kwa upendo. Tafuta huduma ya afya kama homa inadumu zaidi ya siku 3."
-                    : "Fever is a sign of infection. For children under 3 months, contact a doctor IMMEDIATELY. " +
-                      "For older children, if fever is above 38°C, prioritize: giving plenty of fluids, " +
-                      "dressing them lightly, and providing loving care. Seek medical care if fever persists beyond 3 days.");
-                break;
-            case "GROWTH":
-                response.append(isSwahili
-                    ? "Kufuatilia ukuaji wa mtoto wako ni muhimu. Nenda kliniki kwa kila chanjo kwa kupima uzito na urefu. " +
-                      "Tumia chati za WHO kwa umri wa mtoto wako kuhakikisha ana ukuaji wa kawaida."
-                    : "Tracking your child's growth is important. Visit the clinic at each vaccination for weight and height checks. " +
-                      "Use WHO charts for your child's age to ensure normal growth.");
-                break;
-            case "PREGNANCY":
-                response.append(isSwahili
-                    ? "Hongera kwa ujauzito! Nenda kliniki ya mama mjamzito mara kwa mara. " +
-                      "Kula vizuri, pumzika vya kutosha, na kuchukua vitamin za ujauzito. " +
-                      "Tafuta huduma ya afya mara moja kwa dalili zozote za hatari."
-                    : "Congratulations on your pregnancy! Attend antenatal clinic regularly. " +
-                      "Eat well, rest adequately, and take prenatal vitamins. " +
-                      "Seek healthcare immediately for any danger signs.");
-                break;
-            case "COUGH_COLD":
-                response.append(isSwahili
-                    ? "Kikohozi na mafua ni kawaida kwa watoto. Hakikisha mtoto anapumzika vya kutosha, " +
-                      "anapata maji mengi, na kula vizuri. Kama dalili zinaendelea zaidi ya siku 10 " +
-                      "au kama mtoto ana homa, tafuta huduma ya afya."
-                    : "Coughs and colds are common in children. Ensure the child rests adequately, " +
-                      "drinks plenty of fluids, and eats well. If symptoms persist beyond 10 days " +
-                      "or the child develops a fever, seek medical care.");
-                break;
-            case "DIARRHEA":
-                response.append(isSwahili
-                    ? "Kuharisha kunaweza kusababisha upungufu wa maji mwilini. " +
-                      "Mpe mtoto ORS (Oral Rehydration Salts) na maji mengi. " +
-                      "Endelea kumlisha kama kawaida. Tafuta huduma ya afya HARAKA " +
-                      "kama kuna dalili za upungufu wa maji, damu kwenye kinyesi, au homa."
-                    : "Diarrhea can cause dehydration. Give the child ORS (Oral Rehydration Salts) and plenty of fluids. " +
-                      "Continue feeding as usual. Seek medical care IMMEDIATELY " +
-                      "if there are signs of dehydration, blood in stool, or fever.");
-                break;
-            default:
-                response.append(isSwahili
-                    ? "Asante kwa swali lako. Kwa maswali maalum ya afya, " +
-                      "ninapendekeza uwasiliane na mtoa huduma wa afya aliye karibu. " +
-                      "Je, kuna kitu kingine chochote ninachoweza kukusaidia nacho?"
-                    : "Thank you for your question. For specific health concerns, " +
-                      "I recommend contacting your nearest healthcare provider. " +
-                      "Is there anything else I can help you with?");
+        String knowledge = ChildHealthKnowledgeBase.get(intent, language);
+        if (knowledge != null) {
+            response.append(knowledge);
+        } else {
+            // GENERAL — the question didn't match a known topic. Rather than a
+            // dead-end non-answer, point at what this assistant can actually
+            // help with, so the person gets somewhere useful next.
+            response.append(isSwahili
+                ? "Naweza kukusaidia na maswali kuhusu: chanjo, lishe, homa, kuharisha, kikohozi/mafua, " +
+                  "ukuaji wa mtoto, unyonyeshaji, usingizi, vipele vya ngozi, huduma ya kwanza, usafi, " +
+                  "hatua za ukuaji, ujauzito, au utapiamlo. Jaribu kuuliza swali lako kwa njia hiyo, " +
+                  "kwa mfano \"mtoto wangu ana homa, nifanye nini?\""
+                : "I can help with questions about: vaccinations, nutrition, fever, diarrhea, cough/cold, " +
+                  "growth, breastfeeding, sleep, skin rashes, first aid, hygiene, developmental milestones, " +
+                  "pregnancy, or malnutrition. Try asking about one of those directly — " +
+                  "for example \"my child has a fever, what should I do?\"");
         }
 
         response.append(disclaimer);
         return response.toString();
     }
 
-    private AIConversation saveConversation(User user, AIChatRequest request, String response, String intent, String language, long startTime) {
-        AIConversation convo = AIConversation.builder()
-                .user(user)
-                .childId(request.getChildId())
-                .sessionId(request.getSessionId())
-                .userMessage(request.getMessage())
-                .aiResponse(response)
-                .intent(intent)
-                .language(language)
-                .durationMs(System.currentTimeMillis() - startTime)
-                .build();
-        return conversationRepository.save(convo);
-    }
-
     /**
      * Calls a real LLM (Groq or OpenAI) and returns its reply.
      * Returns null on any error — caller falls back to generateSafeResponse.
      */
-    private String callRealAI(String userMessage, Long childId, String language) {
+    private String callRealAI(String userMessage, Long childId, String language, String intent) {
         boolean sw = "sw".equals(language);
         StringBuilder system = new StringBuilder();
         system.append(sw
@@ -369,26 +321,44 @@ public class AIService {
                 String gender = child.getGender();
                 if (sw) {
                     system.append("Mtoto wa mteja ana miezi ").append(ageMonths).append(" (");
-                    system.append("M" .equals(gender) ? "mvulana" : "msichana").append("). ");
+                    system.append("MALE".equals(gender) ? "mvulana" : "msichana").append("). ");
                 } else {
                     system.append("The user's child is ").append(ageMonths).append(" months old (");
                     system.append("MALE".equals(gender) ? "boy" : "girl").append("). ");
                 }
             }
         }
+
+        // Ground the model in the specific, WHO/Tanzania-aligned facts for the
+        // detected topic — this is what keeps answers specific to the actual
+        // question instead of generic. The model can still go beyond this
+        // excerpt, but it now has accurate local reference facts to anchor to.
+        String knowledge = ChildHealthKnowledgeBase.get(intent, language);
+        if (knowledge != null) {
+            system.append(sw
+                    ? "Maelezo ya rejea kwa mada hii (tumia kama msingi wa jibu lako, si lazima kuyanukuu neno kwa neno): "
+                    : "Reference facts for this topic (use these to ground your answer — no need to quote verbatim): ");
+            system.append(knowledge).append(" ");
+        }
+
         system.append(sw
                 ? "Mambo muhimu: 1) Daima onya kwa wazazi kwamba kwa dharura ya kweli wanapaswa kwenda hospitali. "
                         + "2) Usitoe dawa maalum, sindano, au vipimo. "
                         + "3) Rejelea chanjo za EPI za Tanzania, lishe bora, na umuhimu wa kumwona daktari. "
                         + "4) Usibadilishe ushauri wa daktari aliyetoa. "
-                        + "5) Jibu kwa Kiswahili ikiwa mtumiaji anaandika kwa Kiswahili."
+                        + "5) Jibu kwa Kiswahili ikiwa mtumiaji anaandika kwa Kiswahili. "
+                        + "6) MUHIMU: Jibu swali hasa alilouliza mtumiaji — usitoe muhtasari wa jumla kama ameuliza kitu maalum. "
+                        + "Kama ni salamu tu (mfano \"Hujambo\"), mkaribishe kwa ufupi na muulize unachoweza kumsaidia."
                 : "Important rules: 1) Always tell parents to go to a hospital for real emergencies. "
                         + "2) Never prescribe specific medications, injections, or lab tests. "
                         + "3) Reference Tanzania's EPI vaccination schedule, good nutrition, and the importance of seeing a doctor. "
                         + "4) Don't contradict advice a doctor has already given. "
                         + "5) Reply in Kiswahili if the user wrote in Kiswahili, otherwise in English. "
                         + "6) Keep answers under 150 words. "
-                        + "7) End with one short medical disclaimer sentence.");
+                        + "7) End with one short medical disclaimer sentence. "
+                        + "8) IMPORTANT: Answer the specific question the user actually asked — don't give a generic " +
+                          "overview if they asked something specific. If the message is just a greeting (e.g. \"Hello\"), " +
+                          "greet them back briefly and ask what you can help with — don't launch into unrelated child-health advice.");
 
         return aiClient.chatWithPrompts(system.toString(), userMessage);
     }

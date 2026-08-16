@@ -27,6 +27,7 @@ public class DoctorDto {
     private Long facilityId;
     private String facilityName;
     private Double consultationFee;
+    private Boolean credentialsVerified;
 
     public static DoctorDto from(Doctor d) {
         User u = d.getUser();
@@ -49,6 +50,7 @@ public class DoctorDto {
             .facilityId(f != null ? f.getId() : null)
             .facilityName(f != null ? f.getName() : null)
             .consultationFee(d.getConsultationFee())
+            .credentialsVerified(d.getCredentialsVerified())
             .build();
     }
 

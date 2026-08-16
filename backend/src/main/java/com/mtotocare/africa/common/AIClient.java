@@ -41,7 +41,7 @@ public class AIClient {
                 if (props.getApiKey() == null || props.getApiKey().isBlank()) {
                     log.warn("mtotocare.ai.provider=groq but GROQ_API_KEY is blank. Falling back to mock.");
                 } else {
-                    log.info("AI client: GROQ (model={})", props.getModel().isBlank() ? "llama-3.3-70b-versatile" : props.getModel());
+                    log.info("AI client: GROQ (model={})", props.getModel().isBlank() ? "openai/gpt-oss-120b" : props.getModel());
                 }
                 break;
             case "openai":
@@ -71,7 +71,7 @@ public class AIClient {
         try {
             switch (provider) {
                 case "groq":
-                    return call(GROQ_URL, "llama-3.3-70b-versatile");
+                    return call(GROQ_URL, "openai/gpt-oss-120b");
                 case "openai":
                     return call(OPENAI_URL, "gpt-4o-mini");
                 default:
@@ -151,7 +151,7 @@ public class AIClient {
             if ("groq".equals(provider) && (props.getApiKey() == null || props.getApiKey().isBlank())) return false;
             if ("openai".equals(provider) && (props.getApiKey() == null || props.getApiKey().isBlank())) return false;
             switch (provider) {
-                case "groq":  return streamCall(GROQ_URL, "llama-3.3-70b-versatile", onChunk);
+                case "groq":  return streamCall(GROQ_URL, "openai/gpt-oss-120b", onChunk);
                 case "openai": return streamCall(OPENAI_URL, "gpt-4o-mini", onChunk);
                 default: return false;
             }

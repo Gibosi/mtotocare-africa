@@ -36,6 +36,7 @@ public class GrowthService {
     private final DevelopmentMilestoneService developmentMilestoneService;
     private final AppointmentService appointmentService;
     private final NotificationService notificationService;
+    private final com.mtotocare.africa.user.UserRepository userRepository;
 
     /**
      * Add a measurement and run the full WHO Child Growth Assessment against
@@ -183,8 +184,21 @@ public class GrowthService {
 
     @Transactional(readOnly = true)
     public List<GrowthDto> getForChild(Long childId) {
+        verifyAccess(childId);
         return growthRepository.findByChildIdOrderByMeasurementDateDesc(childId)
                 .stream().map(GrowthDto::from).collect(Collectors.toList());
+    }
+
+    private void verifyAccess(Long childId) {
+        Child child = childRepository.findById(childId)
+                .orElseThrow(() -> new ApiException("Child not found", HttpStatus.NOT_FOUND, "CHILD_NOT_FOUND"));
+        com.mtotocare.africa.user.User user = userRepository.findByEmail(SecurityUtils.getCurrentUserEmail())
+                .orElseThrow(() -> new ApiException("User not found", HttpStatus.UNAUTHORIZED, "USER_NOT_FOUND"));
+        boolean isOwner = child.getParent() != null && child.getParent().getId().equals(user.getId());
+        boolean isStaff = user.isHealthcareProvider() || SecurityUtils.hasAnyRole("ADMIN");
+        if (!isOwner && !isStaff) {
+            throw new ApiException("Access denied", HttpStatus.FORBIDDEN, "ACCESS_DENIED");
+        }
     }
 
     @Transactional(readOnly = true)

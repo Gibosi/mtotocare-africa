@@ -55,4 +55,14 @@ public class Doctor extends BaseEntity {
 
     @Column(name = "consultation_fee")
     private Double consultationFee;
+
+    /**
+     * Whether an admin has confirmed this doctor's medical license/credentials
+     * against the relevant licensing body. Defaults false — accounts start
+     * unverified until an admin explicitly verifies them, even though only
+     * admins can create clinical-role accounts in the first place.
+     */
+    @Column(name = "credentials_verified", nullable = false)
+    @Builder.Default
+    private Boolean credentialsVerified = false;
 }

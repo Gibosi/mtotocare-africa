@@ -23,15 +23,30 @@ public class MedicationService {
     private final UserRepository userRepository;
 
     public List<MedicationDto> getForChild(Long childId) {
+        verifyAccess(childId);
         return medicationRepository.findByChildId(childId).stream()
             .map(MedicationDto::from)
             .collect(Collectors.toList());
     }
 
     public List<MedicationDto> getActive(Long childId) {
+        verifyAccess(childId);
         return medicationRepository.findByChildIdAndActive(childId, true).stream()
             .map(MedicationDto::from)
             .collect(Collectors.toList());
+    }
+
+    private void verifyAccess(Long childId) {
+        Child child = childRepository.findById(childId)
+                .orElseThrow(() -> new ApiException("Child not found", HttpStatus.NOT_FOUND, "CHILD_NOT_FOUND"));
+        User user = userRepository.findActiveByEmail(
+                SecurityContextHolder.getContext().getAuthentication().getName()
+        ).orElseThrow(() -> new ApiException("User not found", HttpStatus.UNAUTHORIZED, "USER_NOT_FOUND"));
+        boolean isOwner = child.getParent() != null && child.getParent().getId().equals(user.getId());
+        boolean isStaff = user.isHealthcareProvider() || com.mtotocare.africa.common.SecurityUtils.hasAnyRole("ADMIN");
+        if (!isOwner && !isStaff) {
+            throw new ApiException("Access denied", HttpStatus.FORBIDDEN, "ACCESS_DENIED");
+        }
     }
 
     @Transactional

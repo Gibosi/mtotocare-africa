@@ -82,9 +82,9 @@ export default function AdminSyncScreen() {
 
 function StatBox({ label, value, color, theme }: { label: string; value: any; color: string; theme: any }) {
   return (
-    <View style={[styles.statBox, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+    <View style={[styles.statBox, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
       <Text style={[styles.statValue, { color }]}>{String(value)}</Text>
-      <Text style={[styles.statLabel, { color: theme.textSecondary }]}>{label}</Text>
+      <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>{label}</Text>
     </View>
   );
 }

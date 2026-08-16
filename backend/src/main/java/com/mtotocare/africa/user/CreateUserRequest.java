@@ -39,4 +39,9 @@ public class CreateUserRequest {
      * MIDWIFE, CHW, HEALTHCARE_PROVIDER, ADMIN.
      */
     private Set<String> roles;
+
+    // Only used when roles includes a clinical role (DOCTOR/NURSE/MIDWIFE/CHW).
+    private String licenseNumber;
+    private String specialization;
+    private Long facilityId;
 }

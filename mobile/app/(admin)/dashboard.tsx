@@ -91,12 +91,12 @@ export default function AdminDashboard() {
 
 function StatCard({ icon, label, value, color, theme }: { icon: any; label: string; value: any; color: string; theme: any }) {
   return (
-    <View style={[styles.statCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+    <View style={[styles.statCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}>
       <View style={[styles.statIcon, { backgroundColor: color + '20' }]}>
         <Ionicons name={icon} size={20} color={color} />
       </View>
-      <Text style={[styles.statValue, { color: theme.text }]}>{String(value)}</Text>
-      <Text style={[styles.statLabel, { color: theme.textSecondary }]}>{label}</Text>
+      <Text style={[styles.statValue, { color: theme.colors.text }]}>{String(value)}</Text>
+      <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>{label}</Text>
     </View>
   );
 }
@@ -104,13 +104,13 @@ function StatCard({ icon, label, value, color, theme }: { icon: any; label: stri
 function ActionCard({ icon, label, onPress, theme }: { icon: any; label: string; onPress: () => void; theme: any }) {
   return (
     <TouchableOpacity
-      style={[styles.actionCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
+      style={[styles.actionCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border }]}
       onPress={onPress}
     >
-      <View style={[styles.actionIcon, { backgroundColor: theme.featureBg }]}>
-        <Ionicons name={icon} size={20} color={theme.primary} />
+      <View style={[styles.actionIcon, { backgroundColor: theme.colors.featureBg }]}>
+        <Ionicons name={icon} size={20} color={theme.colors.primary} />
       </View>
-      <Text style={[styles.actionLabel, { color: theme.text }]}>{label}</Text>
+      <Text style={[styles.actionLabel, { color: theme.colors.text }]}>{label}</Text>
     </TouchableOpacity>
   );
 }

@@ -4,7 +4,8 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../src/theme/ThemeProvider';
 import { useAppSelector } from '../src/store/hooks';
-import { allergiesApi, medicationsApi, growthApi } from '../src/api';
+import { allergiesApi, medicationsApi, growthApi, diagnosesApi, attachmentsApi } from '../src/api';
+import { Diagnosis, Attachment } from '../src/types';
 import { Card } from '../src/components/Card';
 import { EmptyState } from '../src/components/EmptyState';
 import { Button } from '../src/components/Button';
@@ -20,6 +21,8 @@ export default function MedicalRecordsScreen() {
 
   const [allergies, setAllergies] = useState<any[]>([]);
   const [medications, setMedications] = useState<any[]>([]);
+  const [visits, setVisits] = useState<Diagnosis[]>([]);
+  const [labs, setLabs] = useState<Attachment[]>([]);
   const [loading, setLoading] = useState(false);
   const [section, setSection] = useState<Section>('allergies');
 
@@ -29,9 +32,17 @@ export default function MedicalRecordsScreen() {
     Promise.allSettled([
       allergiesApi.getForChild(child.id),
       medicationsApi.getForChild(child.id),
-    ]).then(([a, m]) => {
+      diagnosesApi.getForChild(child.id),
+      attachmentsApi.getForChild(child.id),
+    ]).then(([a, m, d, att]) => {
       if (a.status === 'fulfilled') setAllergies(a.value.data.data || []);
       if (m.status === 'fulfilled') setMedications(m.value.data.data || []);
+      if (d.status === 'fulfilled') {
+        setVisits((d.value.data.data || []).slice().sort((x, y) => new Date(y.diagnosedAt).getTime() - new Date(x.diagnosedAt).getTime()));
+      }
+      if (att.status === 'fulfilled') {
+        setLabs((att.value.data.data || []).filter(x => x.category === 'LAB_RESULT'));
+      }
     }).finally(() => setLoading(false));
   }, [child?.id]);
 
@@ -133,18 +144,60 @@ export default function MedicalRecordsScreen() {
             {section === 'visits' && (
               <View style={styles.detailSection}>
                 <Text style={[styles.detailTitle, { color: theme.colors.text }]}>Health Visits</Text>
-                <Text style={[styles.none, { color: theme.colors.textSecondary }]}>
-                  Visit history will appear here. Ask your doctor to record visits after each appointment.
-                </Text>
+                {visits.length === 0 ? (
+                  <Text style={[styles.none, { color: theme.colors.textSecondary }]}>
+                    No visit records yet. These appear here once a doctor records a diagnosis.
+                  </Text>
+                ) : (
+                  visits.map((v) => (
+                    <View key={v.id} style={[styles.recordCard, { borderColor: theme.colors.border }]}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={[styles.recordTitle, { color: theme.colors.text }]}>{v.condition}</Text>
+                        <View style={[styles.severityBadge, {
+                          backgroundColor: v.severity === 'SEVERE' ? theme.colors.errorLight
+                            : v.severity === 'MODERATE' ? theme.colors.warningLight : theme.colors.successLight
+                        }]}>
+                          <Text style={{
+                            fontSize: 10, fontWeight: '700',
+                            color: v.severity === 'SEVERE' ? theme.colors.error
+                              : v.severity === 'MODERATE' ? theme.colors.warning : theme.colors.success
+                          }}>{v.severity}</Text>
+                        </View>
+                      </View>
+                      <Text style={[styles.recordMeta, { color: theme.colors.textSecondary }]}>
+                        {formatDate(v.diagnosedAt)}{v.doctorName ? ` · Dr. ${v.doctorName}` : ''}
+                      </Text>
+                      {v.treatmentPlan ? (
+                        <Text style={[styles.recordNote, { color: theme.colors.text }]}>{v.treatmentPlan}</Text>
+                      ) : null}
+                      {v.notes ? (
+                        <Text style={[styles.recordNote, { color: theme.colors.textSecondary }]}>{v.notes}</Text>
+                      ) : null}
+                    </View>
+                  ))
+                )}
               </View>
             )}
 
             {section === 'labs' && (
               <View style={styles.detailSection}>
                 <Text style={[styles.detailTitle, { color: theme.colors.text }]}>Lab Results</Text>
-                <Text style={[styles.none, { color: theme.colors.textSecondary }]}>
-                  Lab results will appear here once uploaded by your healthcare provider.
-                </Text>
+                {labs.length === 0 ? (
+                  <Text style={[styles.none, { color: theme.colors.textSecondary }]}>
+                    Lab results will appear here once uploaded by your healthcare provider.
+                  </Text>
+                ) : (
+                  labs.map((l) => (
+                    <View key={l.id} style={[styles.recordCard, { borderColor: theme.colors.border }]}>
+                      <Text style={[styles.recordTitle, { color: theme.colors.text }]}>
+                        {l.originalFileName || l.fileName}
+                      </Text>
+                      {l.description ? (
+                        <Text style={[styles.recordNote, { color: theme.colors.textSecondary }]}>{l.description}</Text>
+                      ) : null}
+                    </View>
+                  ))
+                )}
               </View>
             )}
 
@@ -175,6 +228,11 @@ const styles = StyleSheet.create({
   sectionCard: { flex: 1, minWidth: '47%', padding: 16, borderRadius: 12, borderWidth: 1, alignItems: 'center' },
   sectionLabel: { fontSize: 12, fontWeight: '500', marginTop: 8 },
   detailSection: { marginTop: 8 },
+  recordCard: { padding: 12, borderRadius: 10, borderWidth: 1, marginBottom: 10 },
+  recordTitle: { fontSize: 14, fontWeight: '600', flexShrink: 1 },
+  recordMeta: { fontSize: 12, marginTop: 4 },
+  recordNote: { fontSize: 13, marginTop: 6, lineHeight: 18 },
+  severityBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   detailTitle: { fontSize: 16, fontWeight: '600', marginBottom: 8 },
   none: { fontSize: 13, fontStyle: 'italic' },
   allergyRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },

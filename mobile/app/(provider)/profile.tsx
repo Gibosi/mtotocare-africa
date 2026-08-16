@@ -97,8 +97,8 @@ export default function ProviderProfileScreen() {
 function InfoRow({ label, value, theme }: { label: string; value: string; theme: any }) {
   return (
     <View style={styles.infoRow}>
-      <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>{label}</Text>
-      <Text style={[styles.infoValue, { color: theme.text }]}>{value}</Text>
+      <Text style={[styles.infoLabel, { color: theme.colors.textSecondary }]}>{label}</Text>
+      <Text style={[styles.infoValue, { color: theme.colors.text }]}>{value}</Text>
     </View>
   );
 }

@@ -26,6 +26,9 @@ public class UserDto {
     private Set<String> roles;
     private LocalDateTime createdAt;
     private LocalDateTime lastLoginAt;
+    /** Populated by the admin user-list endpoint for healthcare-provider users. */
+    private Long doctorId;
+    private Boolean credentialsVerified;
 
     public static UserDto from(User user) {
         return UserDto.builder()

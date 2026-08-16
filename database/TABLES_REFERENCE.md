@@ -80,7 +80,7 @@ This document maps every JPA entity to its database table and Flyway migration f
 | Profile | DB | Flyway | JPA |
 |---------|----|----|-----|
 | **dev** | H2 in-memory | **disabled** | `ddl-auto: update` |
-| **prod** | MySQL 8 | **enabled** | `ddl-auto: validate` |
+| **prod** | PostgreSQL | **enabled** | `ddl-auto: validate` |
 
 In dev, JPA auto-creates the schema from entities. In prod, Flyway runs V1–V11 to create the same tables.
 
