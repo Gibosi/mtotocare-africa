@@ -679,3 +679,52 @@ Unified cross-module patient timeline, and bulk/CSV reporting exports —
 not addressed this round; the verification workflow above and the
 schema.sql fix took priority as the more safety-relevant and more broadly
 impactful items respectively.
+
+---
+
+# Follow-up: production deploy crash — Flyway V14 "already exists" (2026-08-16)
+
+Real deploy log showed the backend **failing to start entirely**:
+`Migration V14__add_audit_logs.sql failed ... relation "audit_logs" already
+exists`, with Flyway reporting the schema was only at version 13. Since the
+whole Spring context fails to initialize when a migration fails, this also
+fully explains the second thing reported in the same message — the web
+provider portal showing "No upcoming appointments" for a doctor who has one
+in the mobile app: the backend wasn't running at all, so every API call
+from the frontend was hitting a dead server. Not a separate bug; same root
+cause.
+
+## Root cause
+`audit_logs` (and its indexes) already physically existed in the Render
+Postgres database, but Flyway's own history table didn't have a
+successful record for V14 — so on the next deploy it tried to create the
+table again and hit a conflict. Given Postgres runs each Flyway migration
+in a transaction and the log says "changes successfully rolled back", the
+most likely explanation is an earlier deploy attempt got further before
+something (a DB reset, a manual fix attempt, differing behavior across
+redeploys) left `flyway_schema_history` out of sync with what was actually
+in the database — the objects survived, the bookkeeping didn't.
+
+## Fix
+Made every migration from V14 onward idempotent (`CREATE TABLE IF NOT
+EXISTS`, `CREATE INDEX IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`) —
+V14 (audit_logs), V15 (nutrition_plans fields), V16 (WHO growth assessment
+fields), V17 (doctor credentials_verified). This is safe to do because
+none of these had ever successfully recorded a checksum in
+`flyway_schema_history` (the log confirms schema was stuck at version 13,
+i.e. only V1–V13 succeeded) — modifying an *already-applied* migration
+would break Flyway's checksum validation on the next deploy, so V1–V13
+were deliberately left untouched. With this change, migrations succeed
+regardless of whatever inconsistent state the objects vs. the history
+table were already in, without needing manual database surgery.
+
+## What this doesn't fix
+If the live database's actual table *contents* (not just existence) are
+also inconsistent with what V14+ expect — e.g. a column with a different
+type than the migration specifies — `IF NOT EXISTS` won't reconcile that,
+since it only skips creation when the name already exists, it doesn't
+diff and correct structure. If a future deploy still fails after this fix
+with a different error (a column type mismatch, a missing column, etc.),
+that would mean the actual schema drifted further and needs a one-time,
+direct look at what's really in that database — not something guessable
+from here.

@@ -3,4 +3,4 @@
 -- body. Defaults false for all existing rows; an admin explicitly marks
 -- each doctor verified via PUT /admin/doctors/{id}/verify.
 ALTER TABLE doctors
-    ADD COLUMN credentials_verified BOOLEAN NOT NULL DEFAULT FALSE;
+    ADD COLUMN IF NOT EXISTS credentials_verified BOOLEAN NOT NULL DEFAULT FALSE;
